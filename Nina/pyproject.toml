@@ -1,0 +1,17 @@
+[project]
+name = "silicium-ai-os"
+version = "0.1.0"
+description = "Silicium AI Operating System — Canonical Schema Validators, Tool Gateway & Milestone 1 Control Loop"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["17_TESTS"]

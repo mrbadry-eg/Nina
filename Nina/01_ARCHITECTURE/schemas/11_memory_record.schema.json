@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/11_memory_record.schema.json",
+  "title": "MemoryRecord",
+  "description": "Domain-isolated, source-attributed memory entry enforcing authority precedence and staleness rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_id",
+    "memory_domain",
+    "content_type",
+    "content",
+    "source_system",
+    "source_authority_level",
+    "created_at",
+    "tags"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "pattern": "^MEM-[A-Z]+-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "memory_domain": {
+      "type": "string",
+      "enum": [
+        "business",
+        "founder",
+        "product",
+        "customer",
+        "operational",
+        "creative",
+        "engineering"
+      ]
+    },
+    "content_type": {
+      "type": "string",
+      "enum": [
+        "fact",
+        "inference",
+        "recommendation",
+        "observation",
+        "decision",
+        "lesson"
+      ]
+    },
+    "content": {
+      "type": "object"
+    },
+    "source_system": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_authority_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8,
+      "description": "Matches 03_source_of_truth level 1 (law) through 8 (AI inference)."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "superseded_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^MEM-[A-Z]+-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "verified_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

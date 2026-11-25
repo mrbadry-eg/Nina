@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/07_agent_task.schema.json",
+  "title": "AgentTask",
+  "description": "Delegated sub-task envelope extending Task with agent assignment, model routing class, cost tracking, and delegation chain.",
+  "allOf": [
+    {
+      "$ref": "https://siliciumstore.com/schemas/ai-os/v1/06_task.schema.json#/$defs/task_base"
+    },
+    {
+      "type": "object",
+      "required": [
+        "parent_task_id",
+        "assigned_agent",
+        "model_class",
+        "delegation_chain",
+        "environment"
+      ],
+      "properties": {
+        "parent_task_id": {
+          "type": "string",
+          "pattern": "^TASK-[0-9]{8}-[A-Z0-9]{4,}$"
+        },
+        "assigned_agent": {
+          "type": "string",
+          "enum": [
+            "master-control-plane",
+            "agent.executive",
+            "agent.operations",
+            "agent.support",
+            "agent.product",
+            "subsystem.creative",
+            "agent.marketing",
+            "agent.research",
+            "agent.engineering"
+          ]
+        },
+        "environment": {
+          "type": "string",
+          "enum": [
+            "dev",
+            "staging",
+            "prod"
+          ]
+        },
+        "model_class": {
+          "type": "string",
+          "enum": [
+            "fast",
+            "reasoning",
+            "creative",
+            "vision",
+            "coding",
+            "research"
+          ]
+        },
+        "model_used": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token_usage": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "input_tokens",
+            "output_tokens"
+          ],
+          "properties": {
+            "input_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "output_tokens": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "cost_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "delegation_chain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

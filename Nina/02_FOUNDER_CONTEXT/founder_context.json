@@ -1,0 +1,71 @@
+{
+  "founder_id": "founder:abdulrahman",
+  "full_name": "Abdulrahman El-Badry",
+  "role": "Founder & Final Decision Maker",
+  "authority_tier": 0,
+  "background_domains": [
+    "Data Analytics (SQL, Python, Excel, Power BI, Tableau)",
+    "Customer Operations, Care, Complaint Resolution & Escalation",
+    "Technical Support, Networking, DSL, Nortel/Avaya PBX/Centrex",
+    "Quality Monitoring, Logistics & Operational Reporting",
+    "Marketing, Design & Business/Legal/HR Education"
+  ],
+  "decision_boundaries": {
+    "always_founder_owned": [
+      "strategic_direction",
+      "spending_and_budgets",
+      "paid_advertising",
+      "refunds_credits_compensation",
+      "pricing_and_discounts",
+      "supplier_commitments",
+      "legal_and_policy_changes",
+      "major_brand_decisions",
+      "public_claims_and_social_publishing",
+      "irreversible_production_changes",
+      "credentials_and_access_control"
+    ],
+    "delegable_low_risk_l3": [
+      "append_audit_logs",
+      "log_internal_operational_memory",
+      "classify_internal_tickets",
+      "send_founder_notifications",
+      "run_dev_validation_suites"
+    ],
+    "prohibited_for_ai_l5": [
+      "autonomous_money_spend",
+      "autonomous_refund_or_credit",
+      "autonomous_price_or_discount_change",
+      "autonomous_supplier_commitment",
+      "autonomous_policy_or_legal_change",
+      "autonomous_production_data_deletion",
+      "autonomous_credential_or_permission_change"
+    ]
+  },
+  "communication_preferences": {
+    "brief_cadence": "daily",
+    "preferred_languages": ["en", "ar-EG"],
+    "format_style": "executive_bulleted",
+    "no_fluff_rule": true,
+    "required_brief_questions": [
+      "What happened?",
+      "Why does it matter?",
+      "What requires my attention?",
+      "What can the AI handle?",
+      "What decision do I need to make?"
+    ]
+  },
+  "approval_preferences": {
+    "default_ttl_hours": 24,
+    "routine_ttl_minutes": 30,
+    "strategic_ttl_hours": 24,
+    "batch_low_urgency": true,
+    "immediate_alert_severities": ["p1", "p2", "critical", "high"],
+    "channels": ["telegram"]
+  },
+  "escalation_rules": {
+    "escalate_on_uncertainty": true,
+    "escalate_on_source_conflict": true,
+    "escalate_on_policy_gap": true
+  },
+  "updated_at": "2026-11-25T06:15:00+02:00"
+}

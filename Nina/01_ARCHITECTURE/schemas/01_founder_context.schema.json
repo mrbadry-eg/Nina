@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/01_founder_context.schema.json",
+  "title": "FounderContext",
+  "description": "Founder identity, decision authority, working style, escalation preferences, and delegation boundaries for Abdulrahman El-Badry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "founder_id",
+    "full_name",
+    "role",
+    "authority_tier",
+    "decision_boundaries",
+    "communication_preferences",
+    "approval_preferences",
+    "escalation_rules",
+    "updated_at"
+  ],
+  "properties": {
+    "founder_id": {
+      "type": "string",
+      "const": "founder:abdulrahman"
+    },
+    "full_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_tier": {
+      "type": "integer",
+      "const": 0
+    },
+    "background_domains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decision_boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "always_founder_owned",
+        "delegable_low_risk_l3",
+        "prohibited_for_ai_l5"
+      ],
+      "properties": {
+        "always_founder_owned": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "delegable_low_risk_l3": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prohibited_for_ai_l5": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "communication_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "brief_cadence",
+        "preferred_languages",
+        "format_style",
+        "no_fluff_rule"
+      ],
+      "properties": {
+        "brief_cadence": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "twice_daily",
+            "on_demand"
+          ]
+        },
+        "preferred_languages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ar",
+              "ar-EG"
+            ]
+          },
+          "minItems": 1
+        },
+        "format_style": {
+          "type": "string",
+          "enum": [
+            "executive_bulleted",
+            "structured_tables",
+            "short_direct"
+          ]
+        },
+        "no_fluff_rule": {
+          "type": "boolean",
+          "const": true
+        },
+        "required_brief_questions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "approval_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "default_ttl_hours",
+        "batch_low_urgency",
+        "immediate_alert_severities",
+        "channels"
+      ],
+      "properties": {
+        "default_ttl_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 168
+        },
+        "routine_ttl_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        },
+        "strategic_ttl_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 168
+        },
+        "batch_low_urgency": {
+          "type": "boolean"
+        },
+        "immediate_alert_severities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "p1",
+              "p2",
+              "critical",
+              "high"
+            ]
+          }
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "telegram",
+              "whatsapp",
+              "email",
+              "notion",
+              "antigravity_ui"
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "escalation_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "escalate_on_uncertainty",
+        "escalate_on_source_conflict",
+        "escalate_on_policy_gap"
+      ],
+      "properties": {
+        "escalate_on_uncertainty": {
+          "type": "boolean",
+          "const": true
+        },
+        "escalate_on_source_conflict": {
+          "type": "boolean",
+          "const": true
+        },
+        "escalate_on_policy_gap": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/08_tool_contract.schema.json",
+  "title": "ToolContract",
+  "description": "Machine-readable registry definition for every narrow MCP or internal tool enforced by the Tool Gateway.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "purpose",
+    "domain",
+    "inputs_schema",
+    "outputs_schema",
+    "auth_method",
+    "permission_level",
+    "risk_level",
+    "autonomy_required",
+    "preconditions",
+    "validation_rules",
+    "error_states",
+    "idempotent",
+    "audit_required",
+    "approval_required",
+    "retry_policy",
+    "rate_limit"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+){1,3}$"
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 5
+    },
+    "domain": {
+      "type": "string",
+      "enum": [
+        "shopify",
+        "support",
+        "product",
+        "google",
+        "notion",
+        "metricool",
+        "creative",
+        "research",
+        "engineering",
+        "internal"
+      ]
+    },
+    "inputs_schema": {
+      "type": "object"
+    },
+    "outputs_schema": {
+      "type": "object"
+    },
+    "auth_method": {
+      "type": "string",
+      "enum": [
+        "none",
+        "api_key",
+        "oauth",
+        "service_account"
+      ]
+    },
+    "permission_level": {
+      "type": "string",
+      "enum": [
+        "read",
+        "draft",
+        "write",
+        "delete"
+      ]
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "safe",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "autonomy_required": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "allowed_environments": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "dev",
+          "staging",
+          "prod"
+        ]
+      },
+      "minItems": 1
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validation_rules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "error_states": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "VALIDATION_ERROR",
+          "AUTH_FAILED",
+          "PERMISSION_DENIED",
+          "APPROVAL_REQUIRED",
+          "APPROVAL_HASH_MISMATCH",
+          "RATE_LIMITED",
+          "NOT_FOUND",
+          "UPSTREAM_TIMEOUT",
+          "UPSTREAM_ERROR",
+          "IDEMPOTENCY_CONFLICT"
+        ]
+      },
+      "minItems": 1
+    },
+    "idempotent": {
+      "type": "boolean"
+    },
+    "audit_required": {
+      "type": "boolean",
+      "const": true
+    },
+    "approval_required": {
+      "type": "boolean"
+    },
+    "retry_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_attempts",
+        "backoff_ms",
+        "retry_on"
+      ],
+      "properties": {
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "backoff_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retry_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rate_limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests_per_minute",
+        "burst"
+      ],
+      "properties": {
+        "requests_per_minute": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "burst": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

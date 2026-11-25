@@ -1,0 +1,21 @@
+{
+  "agents": {
+    "master-control-plane": {
+      "tier": 1,
+      "max_autonomy_level": 2,
+      "allowed_tools": [],
+      "allowed_environments": ["dev", "staging", "prod"],
+      "notes": "Master coordinates, decomposes, validates, and requests approvals; never calls external mutation tools directly."
+    },
+    "agent.operations": {
+      "tier": 2,
+      "max_autonomy_level": 4,
+      "allowed_tools": [
+        "shopify.orders.get",
+        "shopify.orders.add_internal_note"
+      ],
+      "allowed_environments": ["dev", "staging"],
+      "notes": "Milestone 1 bounded domain agent. L0 reads allowed; L4 sandbox order note writes strictly approval-gated."
+    }
+  }
+}

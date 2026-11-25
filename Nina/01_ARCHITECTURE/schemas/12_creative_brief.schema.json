@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/12_creative_brief.schema.json",
+  "title": "CreativeBrief",
+  "description": "Structured input brief for the Creative Content Engine. Must reference verified ProductTruth IDs rather than raw guesses.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "brief_id",
+    "product_ids",
+    "objective",
+    "target_audience",
+    "customer_problem",
+    "product_positioning",
+    "creative_angle",
+    "content_pillar",
+    "key_message",
+    "platforms",
+    "language",
+    "constraints"
+  ],
+  "properties": {
+    "brief_id": {
+      "type": "string",
+      "pattern": "^CBRF-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "product_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PROD-[A-Z0-9-]+$"
+      },
+      "minItems": 1
+    },
+    "campaign_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 5
+    },
+    "target_audience": {
+      "type": "string",
+      "minLength": 3
+    },
+    "customer_problem": {
+      "type": "string",
+      "minLength": 5
+    },
+    "product_positioning": {
+      "type": "string",
+      "minLength": 5
+    },
+    "creative_angle": {
+      "type": "string",
+      "minLength": 5
+    },
+    "content_pillar": {
+      "type": "string",
+      "enum": [
+        "education",
+        "entertainment",
+        "aspiration",
+        "community",
+        "utility"
+      ]
+    },
+    "key_message": {
+      "type": "string",
+      "minLength": 5
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "instagram_reel",
+          "instagram_carousel",
+          "instagram_story",
+          "facebook",
+          "tiktok"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "ar",
+        "ar-EG",
+        "en",
+        "bilingual"
+      ]
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reference_assets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "deadline": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/15_performance_observation.schema.json",
+  "title": "PerformanceObservation",
+  "description": "Observed post-publish metrics from Metricool, platform APIs, or manual entry. Nullable fields signify unmeasured metrics (never inferred as zero).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "observation_id",
+    "asset_id",
+    "platform",
+    "source",
+    "observed_at",
+    "metrics"
+  ],
+  "properties": {
+    "observation_id": {
+      "type": "string",
+      "pattern": "^PERF-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "asset_id": {
+      "type": "string",
+      "pattern": "^CAST-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "instagram_reel",
+        "instagram_carousel",
+        "instagram_story",
+        "facebook",
+        "tiktok"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "metricool",
+        "manual",
+        "platform_api"
+      ]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "window_hours": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "impressions",
+        "reach",
+        "engagement_rate",
+        "likes",
+        "comments",
+        "saves",
+        "shares",
+        "clicks",
+        "conversions",
+        "revenue_attributed_egp"
+      ],
+      "properties": {
+        "impressions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reach": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "engagement_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "likes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "comments": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "saves": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "shares": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "clicks": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "conversions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "revenue_attributed_egp": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

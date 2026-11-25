@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/18_evaluation_case.schema.json",
+  "title": "EvaluationCase",
+  "description": "Deterministic and rubric-backed test case governing release gates across all 10 evaluation dimensions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "dimension",
+    "target_agent",
+    "scenario_description",
+    "input",
+    "expected_behavior",
+    "forbidden_behavior",
+    "assertions",
+    "severity"
+  ],
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "pattern": "^EVAL-[A-Z]+-[0-9]{3,}$"
+    },
+    "dimension": {
+      "type": "string",
+      "enum": [
+        "factuality",
+        "policy",
+        "tool",
+        "permission",
+        "support",
+        "creative",
+        "platform",
+        "alignment",
+        "reliability",
+        "security"
+      ]
+    },
+    "target_agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario_description": {
+      "type": "string",
+      "minLength": 10
+    },
+    "input": {
+      "type": "object"
+    },
+    "expected_behavior": {
+      "type": "string",
+      "minLength": 5
+    },
+    "forbidden_behavior": {
+      "type": "string",
+      "minLength": 5
+    },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "value"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "tool_called",
+              "tool_not_called",
+              "output_contains",
+              "output_not_contains",
+              "schema_valid",
+              "approval_requested",
+              "gateway_blocked",
+              "escalated",
+              "epistemic_labeled"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "last_run": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "last_result": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pass",
+        "fail",
+        null
+      ]
+    },
+    "failure_details": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

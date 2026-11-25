@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/09_approval_request.schema.json",
+  "title": "ApprovalRequest",
+  "description": "Single-use, payload-hash-bound approval envelope required by the Tool Gateway for Level 4 executions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "task_id",
+    "requesting_agent",
+    "tool_name",
+    "action_description",
+    "risk_level",
+    "domain",
+    "resource_affected",
+    "proposed_action",
+    "proposed_action_hash",
+    "reversible",
+    "estimated_impact",
+    "requires_response_by",
+    "status",
+    "consumed",
+    "created_at"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "pattern": "^APR-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^TASK-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "requesting_agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tool_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action_description": {
+      "type": "string",
+      "minLength": 5
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "domain": {
+      "type": "string"
+    },
+    "resource_affected": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proposed_action": {
+      "type": "object"
+    },
+    "proposed_action_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "SHA-256 of canonical JSON proposed_action; Tool Gateway rejects execution if payload diverges."
+    },
+    "reversible": {
+      "type": "boolean"
+    },
+    "estimated_impact": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requires_response_by": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "modified",
+        "expired"
+      ]
+    },
+    "consumed": {
+      "type": "boolean"
+    },
+    "approver": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "founder:abdulrahman",
+        null
+      ]
+    },
+    "approved_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "rejection_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "modifications": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

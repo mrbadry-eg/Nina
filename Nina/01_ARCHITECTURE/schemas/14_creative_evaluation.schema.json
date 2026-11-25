@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/14_creative_evaluation.schema.json",
+  "title": "CreativeEvaluation",
+  "description": "Pre-publish quality evaluation of a CreativeAsset. Strictly distinct from post-publish PerformanceObservation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evaluation_id",
+    "asset_id",
+    "evaluator",
+    "dimensions",
+    "overall",
+    "pass",
+    "revision_requested",
+    "evaluated_at"
+  ],
+  "properties": {
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^CEVL-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "asset_id": {
+      "type": "string",
+      "pattern": "^CAST-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "evaluator": {
+      "type": "string",
+      "enum": [
+        "ai_self_eval",
+        "automated_validator",
+        "founder"
+      ]
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "brand_compliance",
+        "factual_accuracy",
+        "hook_quality",
+        "cta_clarity",
+        "platform_nativeness",
+        "originality_vs_memory"
+      ],
+      "properties": {
+        "brand_compliance": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "factual_accuracy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "passed",
+            "issues"
+          ],
+          "properties": {
+            "passed": {
+              "type": "boolean"
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "hook_quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "cta_clarity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "platform_nativeness": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "originality_vs_memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "similar_assets"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "similar_assets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "overall": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "notes": {
+      "type": "string"
+    },
+    "pass": {
+      "type": "boolean"
+    },
+    "revision_requested": {
+      "type": "boolean"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

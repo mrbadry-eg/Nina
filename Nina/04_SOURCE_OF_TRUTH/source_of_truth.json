@@ -1,0 +1,74 @@
+{
+  "version": "1.0.0",
+  "levels": [
+    {
+      "level": 1,
+      "label": "APPLICABLE_LAW",
+      "source_system": "Egyptian Consumer Protection Law, Tax & Privacy Regulations",
+      "authority": "Statutory Law",
+      "override_rules": { "can_override_levels": [2, 3, 4, 5, 6, 7, 8], "cannot_be_overridden_by_levels": [] },
+      "staleness_threshold_seconds": null
+    },
+    {
+      "level": 2,
+      "label": "OFFICIAL_SILICIUM_POLICY",
+      "source_system": "03_BUSINESS_CONTEXT/policies/",
+      "authority": "Tier 0 Founder",
+      "override_rules": { "can_override_levels": [3, 4, 5, 6, 7, 8], "cannot_be_overridden_by_levels": [1] },
+      "staleness_threshold_seconds": null
+    },
+    {
+      "level": 3,
+      "label": "LIVE_COMMERCE_DATA",
+      "source_system": "Shopify Orders, Checkout & Inventory API",
+      "authority": "Live Commerce System of Record",
+      "override_rules": { "can_override_levels": [4, 5, 6, 7, 8], "cannot_be_overridden_by_levels": [1, 2] },
+      "staleness_threshold_seconds": 300
+    },
+    {
+      "level": 4,
+      "label": "CURRENT_CATALOG_DATA",
+      "source_system": "Shopify Products API + Verified ProductTruth",
+      "authority": "Verified Catalog System of Record",
+      "override_rules": { "can_override_levels": [5, 6, 7, 8], "cannot_be_overridden_by_levels": [1, 2, 3] },
+      "staleness_threshold_seconds": 86400
+    },
+    {
+      "level": 5,
+      "label": "APPROVED_BUSINESS_DOCS",
+      "source_system": "Git Repository Specs & Approved Notion Docs",
+      "authority": "Tier 0 Approved Documentation",
+      "override_rules": { "can_override_levels": [6, 7, 8], "cannot_be_overridden_by_levels": [1, 2, 3, 4] },
+      "staleness_threshold_seconds": 2592000
+    },
+    {
+      "level": 6,
+      "label": "APPROVED_SUPPORT_CONTENT",
+      "source_system": "05_AGENTS/support/templates/",
+      "authority": "Tier 0 Approved Support Templates",
+      "override_rules": { "can_override_levels": [7, 8], "cannot_be_overridden_by_levels": [1, 2, 3, 4, 5] },
+      "staleness_threshold_seconds": 2592000
+    },
+    {
+      "level": 7,
+      "label": "HISTORICAL_OPERATIONAL_DATA",
+      "source_system": "Operational Incidents & Creative Memory",
+      "authority": "Historical Reference Only",
+      "override_rules": { "can_override_levels": [8], "cannot_be_overridden_by_levels": [1, 2, 3, 4, 5, 6] },
+      "staleness_threshold_seconds": null
+    },
+    {
+      "level": 8,
+      "label": "AI_INFERENCE",
+      "source_system": "Agent Reasoning Outputs",
+      "authority": "Non-Authoritative Inference",
+      "override_rules": { "can_override_levels": [], "cannot_be_overridden_by_levels": [1, 2, 3, 4, 5, 6, 7] },
+      "staleness_threshold_seconds": 0
+    }
+  ],
+  "conflict_resolution_policy": {
+    "lower_level_number_wins": true,
+    "log_discrepancy": true,
+    "block_on_stale_live_data": true
+  }
+}

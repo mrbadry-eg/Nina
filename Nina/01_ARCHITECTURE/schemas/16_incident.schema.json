@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/16_incident.schema.json",
+  "title": "Incident",
+  "description": "Operational, catalog, support, system, or security anomaly requiring tracking and root-cause resolution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "incident_id",
+    "type",
+    "severity",
+    "description",
+    "affected_resources",
+    "detected_by",
+    "detected_at",
+    "status"
+  ],
+  "properties": {
+    "incident_id": {
+      "type": "string",
+      "pattern": "^INC-[0-9]{8}-[A-Z0-9]{4,}$"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "order_issue",
+        "catalog_error",
+        "system_failure",
+        "customer_complaint",
+        "security_event",
+        "policy_violation"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "p1",
+        "p2",
+        "p3",
+        "p4"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 5
+    },
+    "affected_resources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "detected_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "detected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "investigating",
+        "mitigating",
+        "resolved",
+        "post_mortem"
+      ]
+    },
+    "assigned_to": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resolution": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resolved_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "root_cause": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "prevention_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_incidents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^INC-[0-9]{8}-[A-Z0-9]{4,}$"
+      }
+    }
+  }
+}

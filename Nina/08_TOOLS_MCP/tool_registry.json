@@ -1,0 +1,95 @@
+{
+  "tools": [
+    {
+      "name": "shopify.orders.get",
+      "purpose": "Read a single order record from the Shopify fixture/store by order_id for operational inspection.",
+      "domain": "shopify",
+      "inputs_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order_id"],
+        "properties": {
+          "order_id": { "type": "string", "pattern": "^ORD-[0-9]{4,}$" }
+        }
+      },
+      "outputs_schema": {
+        "type": "object",
+        "required": ["order_id", "status", "payment_method", "total_egp", "fulfillment_status", "internal_notes"]
+      },
+      "auth_method": "none",
+      "permission_level": "read",
+      "risk_level": "safe",
+      "autonomy_required": 0,
+      "allowed_environments": ["dev", "staging"],
+      "preconditions": ["Order ID must match ORD-XXXX format"],
+      "validation_rules": ["Strict schema validation on order_id"],
+      "error_states": ["VALIDATION_ERROR", "NOT_FOUND"],
+      "idempotent": true,
+      "audit_required": true,
+      "approval_required": false,
+      "retry_policy": { "max_attempts": 2, "backoff_ms": 50, "retry_on": ["UPSTREAM_TIMEOUT"] },
+      "rate_limit": { "requests_per_minute": 60, "burst": 10 }
+    },
+    {
+      "name": "shopify.orders.add_internal_note",
+      "purpose": "Append an operational internal note to a sandbox Shopify order after Tier 0 approval.",
+      "domain": "shopify",
+      "inputs_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order_id", "note", "idempotency_key"],
+        "properties": {
+          "order_id": { "type": "string", "pattern": "^ORD-[0-9]{4,}$" },
+          "note": { "type": "string", "minLength": 5, "maxLength": 500 },
+          "idempotency_key": { "type": "string", "minLength": 8 }
+        }
+      },
+      "outputs_schema": {
+        "type": "object",
+        "required": ["order_id", "note_appended", "total_notes_count"]
+      },
+      "auth_method": "none",
+      "permission_level": "write",
+      "risk_level": "medium",
+      "autonomy_required": 4,
+      "allowed_environments": ["dev", "staging"],
+      "preconditions": ["Tier 0 approval_id with matching SHA-256 proposed_action_hash"],
+      "validation_rules": ["Non-empty note, unique idempotency_key"],
+      "error_states": ["VALIDATION_ERROR", "PERMISSION_DENIED", "APPROVAL_REQUIRED", "APPROVAL_HASH_MISMATCH", "NOT_FOUND", "IDEMPOTENCY_CONFLICT"],
+      "idempotent": true,
+      "audit_required": true,
+      "approval_required": true,
+      "retry_policy": { "max_attempts": 1, "backoff_ms": 0, "retry_on": [] },
+      "rate_limit": { "requests_per_minute": 20, "burst": 5 }
+    },
+    {
+      "name": "shopify.orders.refund",
+      "purpose": "Issue monetary refund on an order (PROHIBITED Level 5 action — blocked unconditionally by Gateway).",
+      "domain": "shopify",
+      "inputs_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order_id", "amount_egp", "reason"],
+        "properties": {
+          "order_id": { "type": "string", "pattern": "^ORD-[0-9]{4,}$" },
+          "amount_egp": { "type": "number", "minimum": 1 },
+          "reason": { "type": "string", "minLength": 3 }
+        }
+      },
+      "outputs_schema": { "type": "object" },
+      "auth_method": "oauth",
+      "permission_level": "write",
+      "risk_level": "critical",
+      "autonomy_required": 5,
+      "allowed_environments": ["prod"],
+      "preconditions": ["Prohibited for AI agents"],
+      "validation_rules": ["Hard blocked at Level 5"],
+      "error_states": ["PERMISSION_DENIED"],
+      "idempotent": false,
+      "audit_required": true,
+      "approval_required": true,
+      "retry_policy": { "max_attempts": 1, "backoff_ms": 0, "retry_on": [] },
+      "rate_limit": { "requests_per_minute": 1, "burst": 1 }
+    }
+  ]
+}

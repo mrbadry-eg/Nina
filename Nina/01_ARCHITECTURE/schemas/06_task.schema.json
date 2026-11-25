@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/06_task.schema.json",
+  "title": "Task",
+  "description": "Canonical universal task envelope entering the Silicium Master Agent / Control Plane.",
+  "$defs": {
+    "task_base": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "objective",
+        "requester",
+        "domain",
+        "priority",
+        "autonomy_level",
+        "inputs",
+        "required_tools",
+        "constraints",
+        "approval_required",
+        "success_criteria",
+        "verification_required",
+        "status",
+        "created_at"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^TASK-[0-9]{8}-[A-Z0-9]{4,}$"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 5
+        },
+        "requester": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "type": "string",
+          "enum": [
+            "executive",
+            "operations",
+            "support",
+            "product",
+            "creative",
+            "marketing",
+            "research",
+            "engineering"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "normal",
+            "high",
+            "urgent"
+          ]
+        },
+        "autonomy_level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ref_type",
+              "ref_id"
+            ],
+            "properties": {
+              "ref_type": {
+                "type": "string",
+                "enum": [
+                  "shopify_order",
+                  "product_truth",
+                  "customer_context",
+                  "creative_brief",
+                  "incident",
+                  "url",
+                  "inline_payload"
+                ]
+              },
+              "ref_id": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "required_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "approval_required": {
+          "type": "boolean"
+        },
+        "success_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "verification_required": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "active",
+            "awaiting_approval",
+            "completed",
+            "failed",
+            "cancelled",
+            "blocked"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/$defs/task_base"
+    }
+  ],
+  "unevaluatedProperties": false
+}

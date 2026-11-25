@@ -1,0 +1,60 @@
+{
+  "company_name": "Silicium",
+  "legal_entity_name": "Silicium Trade",
+  "tax_registration_id": "774-045-779",
+  "website": "https://siliciumstore.com/",
+  "market_country": "EG",
+  "currency": "EGP",
+  "operating_locations": ["Sheraton Heliopolis / Nasr City, Cairo, Egypt"],
+  "product_categories": [
+    "Gaming",
+    "Creator and Streaming Equipment",
+    "Audio",
+    "Headphones",
+    "Speakers",
+    "Microphones",
+    "Mobile Accessories",
+    "Charging and Power",
+    "Input Devices",
+    "Office and Professional Technology",
+    "Stands and Related Accessories"
+  ],
+  "payment_methods": ["cod", "instapay", "visa", "mastercard"],
+  "delivery_coverage": "Egypt-wide delivery via courier partners to eligible addresses",
+  "language_policy": {
+    "internal_system_default": "en",
+    "customer_facing_default": "ar-EG",
+    "customer_facing_secondary": ["en"],
+    "social_content_allowed": ["ar-EG", "en", "bilingual"]
+  },
+  "brand_positioning": {
+    "core_pillars": [
+      "Accountability",
+      "Curation (Si Picks)",
+      "Practical Advice",
+      "Direct Communication",
+      "Reliability",
+      "Useful Technology Recommendations"
+    ],
+    "voice_attributes": [
+      "Clear",
+      "Practical",
+      "Confident",
+      "Human",
+      "Direct",
+      "Technically Literate",
+      "Helpful"
+    ],
+    "differentiation_rule": "Truth comes before persuasion; customer usefulness comes before promotion; never compete solely as a generic low-price marketplace."
+  },
+  "prohibited_practices": [
+    "Fake urgency or false scarcity",
+    "Empty hype and unsupported superlatives",
+    "Invented or extrapolated product specifications",
+    "Fake reviews or fabricated social proof",
+    "Claiming Silicium tested a product when only manufacturer claims exist",
+    "Generic call-center boilerplate",
+    "Autonomous promises of refunds, credits, or delivery exceptions"
+  ],
+  "updated_at": "2026-11-25T06:15:00+02:00"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "updated_at": "2026-11-25T06:15:00+02:00",
+  "rule": "No integration may be invoked for live production execution until status == 'verified'. Phase 0/Milestone 1 runs strictly against deterministic local fixtures.",
+  "integrations": {
+    "shopify_prod": { "status": "unavailable", "mode": "none", "notes": "Do not touch live store until Phase 6." },
+    "shopify_fixture": { "status": "verified", "mode": "local_sandbox", "notes": "Credential-free Milestone 1 deterministic fixture adapter." },
+    "n8n": { "status": "unavailable", "mode": "none", "notes": "Planned for Phase 3 orchestration." },
+    "openrouter": { "status": "unavailable", "mode": "none", "notes": "Model routing config ready; live API key unverified." },
+    "notion": { "status": "unavailable", "mode": "none", "notes": "Planned for Phase 3+ knowledge sync." },
+    "metricool": { "status": "unavailable", "mode": "none", "notes": "Planned for Phase 4 read-only performance ingestion." },
+    "openclaw": { "status": "unavailable", "mode": "none", "notes": "Planned for Phase 3/6 messaging runtime." },
+    "google_workspace": { "status": "unavailable", "mode": "none", "notes": "Planned for Phase 3+." },
+    "telegram_approval_bot": { "status": "unavailable", "mode": "local_cli_stub", "notes": "Configured target channel; local approval stub used in Milestone 1." }
+  }
+}

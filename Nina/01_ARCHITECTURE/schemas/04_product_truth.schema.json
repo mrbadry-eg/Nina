@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/04_product_truth.schema.json",
+  "title": "ProductTruth",
+  "description": "Normalized, source-attributed product truth record. Strictly separate from Creative Memory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "product_id",
+    "shopify_product_id",
+    "name",
+    "brand",
+    "category",
+    "sku",
+    "price_egp",
+    "stock_status",
+    "specifications",
+    "verification_source",
+    "catalog_quality_score",
+    "last_verified"
+  ],
+  "properties": {
+    "product_id": {
+      "type": "string",
+      "pattern": "^PROD-[A-Z0-9-]+$"
+    },
+    "shopify_product_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "brand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sku": {
+      "type": "string",
+      "minLength": 1
+    },
+    "price_egp": {
+      "type": "number",
+      "minimum": 0
+    },
+    "compare_at_price_egp": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "stock_status": {
+      "type": "string",
+      "enum": [
+        "in_stock",
+        "low_stock",
+        "out_of_stock",
+        "pre_order",
+        "discontinued",
+        "unknown"
+      ]
+    },
+    "stock_quantity": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "warranty_terms": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "specifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "value",
+          "value_type",
+          "source"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value_type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "silicium_verified",
+              "manufacturer_claim"
+            ]
+          }
+        }
+      }
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "verified"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "alt_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "verification_source": {
+      "type": "string",
+      "enum": [
+        "manufacturer_claim",
+        "silicium_verified",
+        "mixed"
+      ]
+    },
+    "known_issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "use_cases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "missing_attributes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_products": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^PROD-[A-Z0-9-]+$"
+      }
+    },
+    "catalog_quality_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "last_verified": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

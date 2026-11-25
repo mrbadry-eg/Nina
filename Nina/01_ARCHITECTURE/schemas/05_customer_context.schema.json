@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/05_customer_context.schema.json",
+  "title": "CustomerContext",
+  "description": "Lawful, minimized customer context. Orders are referenced by ID rather than duplicated; financial/card data is strictly excluded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "customer_id",
+    "display_name",
+    "order_history_refs",
+    "open_issues",
+    "communication_preference",
+    "data_consent_status",
+    "updated_at"
+  ],
+  "properties": {
+    "customer_id": {
+      "type": "string",
+      "pattern": "^CUST-[A-Z0-9-]+$"
+    },
+    "shopify_customer_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "order_history_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Live Shopify order IDs only; full order state must be fetched from Level 3 Live Commerce Data."
+    },
+    "interaction_summary": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 2000
+    },
+    "open_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ticket_id",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "ticket_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "awaiting_customer",
+              "awaiting_ops",
+              "escalated",
+              "resolved"
+            ]
+          }
+        }
+      }
+    },
+    "communication_preference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "language"
+      ],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": [
+            "whatsapp",
+            "instagram_dm",
+            "facebook_messenger",
+            "email",
+            "web_form"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "ar",
+            "ar-EG",
+            "en"
+          ]
+        }
+      }
+    },
+    "data_consent_status": {
+      "type": "string",
+      "enum": [
+        "implied_transactional",
+        "explicit_marketing",
+        "restricted",
+        "erasure_requested"
+      ]
+    },
+    "retention_expires_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

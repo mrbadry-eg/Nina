@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/03_source_of_truth.schema.json",
+  "title": "SourceOfTruthRegistry",
+  "description": "Formal 8-level information authority hierarchy and conflict resolution protocol.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "levels",
+    "conflict_resolution_policy"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "levels": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "level",
+          "label",
+          "source_system",
+          "authority",
+          "override_rules",
+          "staleness_threshold_seconds"
+        ],
+        "properties": {
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "APPLICABLE_LAW",
+              "OFFICIAL_SILICIUM_POLICY",
+              "LIVE_COMMERCE_DATA",
+              "CURRENT_CATALOG_DATA",
+              "APPROVED_BUSINESS_DOCS",
+              "APPROVED_SUPPORT_CONTENT",
+              "HISTORICAL_OPERATIONAL_DATA",
+              "AI_INFERENCE"
+            ]
+          },
+          "source_system": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authority": {
+            "type": "string",
+            "minLength": 1
+          },
+          "override_rules": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "can_override_levels",
+              "cannot_be_overridden_by_levels"
+            ],
+            "properties": {
+              "can_override_levels": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                }
+              },
+              "cannot_be_overridden_by_levels": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                }
+              }
+            }
+          },
+          "staleness_threshold_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "conflict_resolution_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lower_level_number_wins",
+        "log_discrepancy",
+        "block_on_stale_live_data"
+      ],
+      "properties": {
+        "lower_level_number_wins": {
+          "type": "boolean",
+          "const": true
+        },
+        "log_discrepancy": {
+          "type": "boolean",
+          "const": true
+        },
+        "block_on_stale_live_data": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    }
+  }
+}

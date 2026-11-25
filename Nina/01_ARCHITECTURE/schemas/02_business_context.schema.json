@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://siliciumstore.com/schemas/ai-os/v1/02_business_context.schema.json",
+  "title": "BusinessContext",
+  "description": "Official company profile, market scope, brand positioning, supported categories, payment methods, and operational baseline for Silicium.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "company_name",
+    "legal_entity_name",
+    "website",
+    "market_country",
+    "currency",
+    "product_categories",
+    "payment_methods",
+    "brand_positioning",
+    "prohibited_practices",
+    "updated_at"
+  ],
+  "properties": {
+    "company_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "legal_entity_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tax_registration_id": {
+      "type": "string"
+    },
+    "website": {
+      "type": "string",
+      "format": "uri"
+    },
+    "market_country": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "operating_locations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "product_categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "payment_methods": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cod",
+          "instapay",
+          "visa",
+          "mastercard",
+          "wallet",
+          "bank_transfer"
+        ]
+      },
+      "minItems": 1
+    },
+    "delivery_coverage": {
+      "type": "string"
+    },
+    "language_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "internal_system_default",
+        "customer_facing_default"
+      ],
+      "properties": {
+        "internal_system_default": {
+          "type": "string",
+          "enum": [
+            "en"
+          ]
+        },
+        "customer_facing_default": {
+          "type": "string",
+          "enum": [
+            "ar-EG",
+            "ar",
+            "en"
+          ]
+        },
+        "customer_facing_secondary": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ar-EG",
+              "ar",
+              "en"
+            ]
+          }
+        },
+        "social_content_allowed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ar-EG",
+              "ar",
+              "en",
+              "bilingual"
+            ]
+          }
+        }
+      }
+    },
+    "brand_positioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core_pillars",
+        "voice_attributes",
+        "differentiation_rule"
+      ],
+      "properties": {
+        "core_pillars": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "voice_attributes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "differentiation_rule": {
+          "type": "string"
+        }
+      }
+    },
+    "prohibited_practices": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
