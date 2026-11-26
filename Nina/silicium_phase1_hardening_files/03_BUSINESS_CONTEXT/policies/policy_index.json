@@ -1,0 +1,61 @@
+{
+  "index_version": "0.1.0",
+  "authority_level": 2,
+  "owner": "founder:abdulrahman",
+  "approval_rule": "A policy is authoritative (Level 2) only when status == 'approved' AND approved_by == 'founder:abdulrahman' AND approved_at is an ISO-8601 date-time. Anything else is treated as a policy gap and contributes no claims.",
+  "policies": [
+    {
+      "policy_id": "POL-WARRANTY-RETURNS-001",
+      "title": "Warranty and Returns Policy",
+      "path": "warranty_returns_policy.md",
+      "version": "0.1.0",
+      "status": "proposed",
+      "approved_by": null,
+      "approved_at": null,
+      "machine_values": {},
+      "open_decisions": ["OD-WR-1", "OD-WR-2", "OD-WR-3", "OD-WR-4", "OD-WR-5"]
+    },
+    {
+      "policy_id": "POL-PAYMENTS-001",
+      "title": "Payments Policy: COD, InstaPay, Cards",
+      "path": "payments_policy.md",
+      "version": "0.1.0",
+      "status": "proposed",
+      "approved_by": null,
+      "approved_at": null,
+      "machine_values": {
+        "accepted_payment_methods": ["cod", "instapay", "visa", "mastercard"],
+        "currency": "EGP"
+      },
+      "open_decisions": ["OD-PAY-1", "OD-PAY-2", "OD-PAY-3", "OD-PAY-4"]
+    },
+    {
+      "policy_id": "POL-SHIPPING-COURIER-001",
+      "title": "Shipping and Courier Policy",
+      "path": "shipping_courier_policy.md",
+      "version": "0.1.0",
+      "status": "proposed",
+      "approved_by": null,
+      "approved_at": null,
+      "machine_values": {
+        "sla_unfulfilled_hours": 48
+      },
+      "open_decisions": ["OD-SHP-1", "OD-SHP-2", "OD-SHP-3", "OD-SHP-4"]
+    },
+    {
+      "policy_id": "POL-DATA-MINIMIZATION-001",
+      "title": "Customer Data Minimization Policy",
+      "path": "data_minimization_policy.md",
+      "version": "0.1.0",
+      "status": "proposed",
+      "approved_by": null,
+      "approved_at": null,
+      "machine_values": {
+        "audit_redaction_keys": ["api_key", "apikey", "token", "secret", "password", "authorization", "phone", "email", "address", "card", "cvv"],
+        "customer_inactivity_purge_months": 24,
+        "incident_retention_months": 12
+      },
+      "open_decisions": ["OD-DM-1", "OD-DM-2", "OD-DM-3"]
+    }
+  ]
+}
