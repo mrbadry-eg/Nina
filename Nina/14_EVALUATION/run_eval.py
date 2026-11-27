@@ -1,4 +1,8 @@
-"""Deterministic Milestone 1 Evaluation Runner (18_evaluation_case.schema.json)."""
+"""Deterministic Evaluation Runner (18_evaluation_case.schema.json).
+
+Runs the Milestone 1 baseline suite (5 cases) and the Phase 1 hardening suite (see phase1_eval.py).
+The Milestone 1 cases are unchanged; the summary reports per-suite counts and an overall total.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +27,7 @@ _gw = load_module("08_TOOLS_MCP/tool_gateway.py", "silicium_tool_gateway")
 _mem = load_module("07_MEMORY/memory_store.py", "silicium_memory_store")
 _ops = load_module("05_AGENTS/operations/operations_agent.py", "silicium_operations_agent")
 _master = load_module("05_AGENTS/master/master_agent.py", "silicium_master_agent")
+_phase1 = load_module("14_EVALUATION/phase1_eval.py", "silicium_phase1_eval")
 
 
 def _new_harness(tmp_dir: Path) -> tuple[Any, Any, Any, Any, Any]:
@@ -59,7 +64,7 @@ def _make_task(order_id: str, suffix: str = "M1A1") -> dict[str, Any]:
     }
 
 
-def run_suite() -> dict[str, Any]:
+def _run_milestone1_cases() -> list[dict[str, Any]]:
     validator = _sv.CanonicalSchemaValidator()
     cases_file = REPO_ROOT / "14_EVALUATION" / "cases" / "milestone1_cases.json"
     cases_data = json.loads(cases_file.read_text(encoding="utf-8"))
@@ -149,8 +154,23 @@ def run_suite() -> dict[str, Any]:
         )
         results.append({"case_id": "EVAL-ALIGNMENT-005", "result": "pass" if ok_005 else "fail"})
 
+    return results
+
+
+def _counts(results: list[dict[str, Any]]) -> dict[str, int]:
     passed = sum(1 for r in results if r["result"] == "pass")
-    summary = {"total": len(results), "passed": passed, "failed": len(results) - passed, "results": results}
+    return {"total": len(results), "passed": passed, "failed": len(results) - passed}
+
+
+def run_suite() -> dict[str, Any]:
+    milestone1 = _run_milestone1_cases()
+    phase1 = _phase1.run_phase1_suite()
+    results = milestone1 + phase1
+    summary = {
+        **_counts(results),
+        "suites": {"milestone1": _counts(milestone1), "phase1": _counts(phase1)},
+        "results": results,
+    }
     print(json.dumps(summary, indent=2))
     if summary["failed"] > 0:
         sys.exit(1)

@@ -120,3 +120,30 @@ class OperationsAgent:
             "epistemic_report": epistemic_report,
             "proposed_l4_action": proposed_l4,
         }
+
+    def recheck_sla(self, *, order_id: str, task_id: str, environment: str = "dev") -> dict[str, Any]:
+        """Fresh L0 read used right before an approved L4 write.
+
+        An approval can be granted minutes before execution; the order may have been fulfilled in
+        between. The caller decides whether to proceed from ``sla_breach`` and uses the returned
+        ``read_result`` as time-stamped evidence for the Tool Gateway freshness precondition.
+        """
+        read_res = self.gateway.invoke(
+            task_id=task_id,
+            agent_id=self.AGENT_ID,
+            environment=environment,
+            tool_name="shopify.orders.get",
+            inputs={"order_id": order_id},
+        )
+        if read_res["status"] != "success" or not read_res["outputs"]:
+            return {"status": "failed", "read_result": read_res, "sla_breach": None, "hours": None}
+        order = read_res["outputs"]
+        hours = int(order.get("hours_since_created", 0))
+        breach = order["fulfillment_status"] == "unfulfilled" and hours >= self.SLA_UNFULFILLED_HOURS
+        return {
+            "status": "ok",
+            "read_result": read_res,
+            "sla_breach": breach,
+            "hours": hours,
+            "fulfillment_status": order["fulfillment_status"],
+        }

@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------------------
+# Silicium AI OS: place this file at the GIT REPOSITORY ROOT (where .git lives).
+# Purpose: keep secrets and runtime data out of Git BEFORE any real key exists.
+# Security model rule: "No Secrets in Code, Prompts, Git, or Workflow Exports".
+# ---------------------------------------------------------------------------
+
+# --- Secrets and local configuration (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.token
+*.key
+*.pem
+secrets/
+**/gateway.token
+*.local.json
+
+# --- Python environments and caches ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# --- Runtime data written by the control plane (local, append-only, may hold PII) ---
+**/15_OBSERVABILITY/audit/*.jsonl
+**/15_OBSERVABILITY/probes/
+# Runtime incidents are local. The committed Phase 0 record has a different file name and stays tracked.
+**/15_OBSERVABILITY/incidents/INC-*.json
+**/07_MEMORY/stores/
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/spend_ledger.json
+
+# --- n8n / OpenClaw exports must be credential-free before they are committed ---
+**/09_N8N/**/credentials*.json
+**/10_OPENCLAW/**/openclaw.json
+**/10_OPENCLAW/**/.openclaw/
+
+# --- Editors / OS ---
+.vscode/*
+!.vscode/settings.json.example
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
