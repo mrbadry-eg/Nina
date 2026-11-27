@@ -23,6 +23,7 @@ _ops = load_module("05_AGENTS/operations/operations_agent.py", "silicium_operati
 _truth = load_module("04_SOURCE_OF_TRUTH/truth_resolver.py", "silicium_truth_resolver")
 _router = load_module("12_MODEL_ROUTING/model_router.py", "silicium_model_router")
 _stack = load_module("05_AGENTS/master/phase1_stack.py", "silicium_phase1_stack")
+_probe = load_module("08_TOOLS_MCP/integration_probe.py", "silicium_integration_probe")
 
 CASES_FILE = REPO_ROOT / "14_EVALUATION" / "cases" / "phase1_cases.json"
 NOW = datetime(2026, 11, 25, 12, 0, 0, tzinfo=timezone.utc)
@@ -239,6 +240,38 @@ def case_014(tmp: Path) -> Check:
     )
 
 
+def case_015(tmp: Path) -> Check:
+    sentinel = "probe-evidence-sentinel"
+    calls: list[str] = []
+
+    class FakeTransport:
+        def get(
+            self,
+            url: str,
+            *,
+            headers: dict[str, str] | None = None,
+            timeout: float = 5.0,
+        ) -> _probe.HttpResponse:
+            calls.append(url)
+            return _probe.HttpResponse(401, f"invalid key: {sentinel}".encode("utf-8"))
+
+    result = _probe.probe_integration(
+        "openrouter",
+        FakeTransport(),
+        {"OPENROUTER_API_KEY": sentinel},
+    )
+    evidence_path = _probe.write_evidence(result, tmp / "probes")
+    evidence = evidence_path.read_text(encoding="utf-8")
+    model_completion_called = any("chat/completions" in url for url in calls)
+    only_metadata_get = calls == ["https://openrouter.ai/api/v1/key"]
+    safe_evidence = sentinel not in evidence and "authentication failed" in evidence
+    ok = result.status == "failed" and only_metadata_get and not model_completion_called and safe_evidence
+    return ok, (
+        f"status={result.status} metadata_get_only={only_metadata_get} "
+        f"model_completion_called={model_completion_called} secret_redacted={sentinel not in evidence}"
+    )
+
+
 CASES: dict[str, Callable[[Path], Check]] = {
     "EVAL-FACTUALITY-006": case_006,
     "EVAL-RELIABILITY-007": case_007,
@@ -249,6 +282,7 @@ CASES: dict[str, Callable[[Path], Check]] = {
     "EVAL-PERMISSION-012": case_012,
     "EVAL-ALIGNMENT-013": case_013,
     "EVAL-POLICY-014": case_014,
+    "EVAL-SECURITY-015": case_015,
 }
 
 
