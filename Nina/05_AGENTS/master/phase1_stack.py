@@ -1,12 +1,13 @@
 """Phase 1 composition root: builds a fully wired, credential-free Silicium control plane.
 
 Everything lives under ``base_dir`` (audit trail, incidents, memory), so building a stack never
-touches repository state. All providers and channels are deterministic local stubs while the
-corresponding integrations are ``unavailable`` in ``08_TOOLS_MCP/integration_status.json``.
+touches repository state. Model providers and channels are deterministic local stubs by default;
+live providers must be explicitly injected.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -63,8 +64,15 @@ def build_phase1_stack(
     resolver = _truth.TruthResolver(audit_logger=audit, policy_index=policy_index)
     gateway = _gw.ToolGateway(fixture=fixture, approvals=approvals, audit_logger=audit, truth_resolver=resolver)
     memory = _mem.MemoryStore(stores_dir=base_dir / "memory")
+    default_provider = provider
+    if default_provider is None:
+        status = integration_status
+        if status is None:
+            status = json.loads(_router.INTEGRATION_STATUS_PATH.read_text(encoding="utf-8"))
+        if status.get("integrations", {}).get("openrouter", {}).get("status") != "verified":
+            default_provider = _router.MockProvider()
     router = _router.ModelRouter(
-        provider=provider, routing_table=routing_table, integration_status=integration_status,
+        provider=default_provider, routing_table=routing_table, integration_status=integration_status,
         ledger=ledger, request_budget=request_budget or _router.RequestBudget(base_dir / "request_budget.sqlite3"),
         audit_logger=audit, alert_sink=alert_sink,
     )

@@ -85,12 +85,13 @@ def test_chains_follow_the_routing_table() -> None:
 def test_hosted_route_mapping_uses_only_founder_approved_free_slugs() -> None:
     ultra = "nvidia/nemotron-3-ultra-550b-a55b:free"
     super_vl = "nvidia/nemotron-3.5-super-vl:free"
-    assert set(TABLE["models"]) == {ultra, super_vl}
+    assert set(TABLE["models"]) == {ultra, super_vl, LM_STUDIO_MODEL}
+    assert TABLE["models"][LM_STUDIO_MODEL] == {"endpoint_tier": "local", "logs_prompts": False}
     for model_class in ("reasoning", "research", "coding", "fast", "creative"):
         assert TABLE["classes"][model_class]["primary"] == ultra
-        assert TABLE["classes"][model_class]["fallbacks"] == [super_vl]
+        assert TABLE["classes"][model_class]["fallbacks"] == [super_vl, LM_STUDIO_MODEL]
     assert TABLE["classes"]["vision"]["primary"] == super_vl
-    assert TABLE["classes"]["vision"]["fallbacks"] == []
+    assert TABLE["classes"]["vision"]["fallbacks"] == [LM_STUDIO_MODEL]
 
 
 def test_free_nvidia_models_are_marked_as_logged_free_endpoints() -> None:
@@ -109,6 +110,7 @@ def _policy_table(chain: list[str], metadata: dict[str, dict]) -> dict:
 FREE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 PAID_MODEL = "test/paid-no-log"
 LOCAL_MODEL = "test/local-private"
+LM_STUDIO_MODEL = "google/gemma-4-e4b"
 POLICY_MODELS = {
     FREE_MODEL: {"endpoint_tier": "free", "logs_prompts": True},
     PAID_MODEL: {"endpoint_tier": "paid", "logs_prompts": False},
@@ -146,7 +148,7 @@ def test_public_data_is_allowed_on_free_endpoint() -> None:
     assert [call["model_id"] for call in provider.calls] == [FREE_MODEL]
 
 
-def test_vision_never_sends_restricted_customer_data_to_hosted_provider() -> None:
+def test_vision_restricted_customer_data_falls_back_to_local_model() -> None:
     provider = _mr.MockProvider()
     router = _mr.ModelRouter(
         provider=provider,
@@ -154,10 +156,10 @@ def test_vision_never_sends_restricted_customer_data_to_hosted_provider() -> Non
         request_budget=_mr.RequestBudget(),
     )
 
-    with pytest.raises(_mr.DataPolicyViolationError):
-        router.complete("vision", MSGS, data_class="restricted", now=NOW)
+    result = router.complete("vision", MSGS, data_class="restricted", now=NOW)
 
-    assert provider.calls == []
+    assert result["model_id"] == LM_STUDIO_MODEL
+    assert [call["model_id"] for call in provider.calls] == [LM_STUDIO_MODEL]
 
 
 def test_internal_fallback_never_weakens_privacy() -> None:
@@ -236,13 +238,13 @@ def test_503_on_primary_falls_back_and_records_attempts(tmp_path: Path) -> None:
     assert events[0]["cost_usd"] == res["cost_usd"]
 
 
-def test_quota_error_stops_the_whole_chain() -> None:
+def test_quota_error_skips_hosted_chain_but_uses_local_fallback() -> None:
     router, provider, _ = _router()
     provider.script(REASONING["primary"], _mr.ProviderQuotaError())
     provider.script(REASONING["fallbacks"][0], _mr.ProviderCapacityError())
-    with pytest.raises(_mr.ProviderQuotaError):
-        router.complete("reasoning", MSGS, now=NOW)
-    assert [call["model_id"] for call in provider.calls] == [REASONING["primary"]]
+    result = router.complete("reasoning", MSGS, now=NOW)
+    assert result["model_id"] == LM_STUDIO_MODEL
+    assert [call["model_id"] for call in provider.calls] == [REASONING["primary"], LM_STUDIO_MODEL]
 
 
 def test_non_retryable_error_does_not_fall_back(tmp_path: Path) -> None:
@@ -390,7 +392,10 @@ def test_default_provider_is_mock_while_openrouter_is_unavailable() -> None:
     status = json.loads((REPO_ROOT / "08_TOOLS_MCP/integration_status.json").read_text(encoding="utf-8"))
     assert status["integrations"]["openrouter"]["status"] == "unavailable"
     router = _mr.ModelRouter(request_budget=_mr.RequestBudget())
-    assert isinstance(router.provider, _mr.MockProvider) and router.provider.simulated is True
+    assert isinstance(router.provider, _mr.ModelProviderPool)
+    assert router.provider.simulated is False
+    assert isinstance(router.provider.provider_for(FREE_MODEL), _mr.MockProvider)
+    assert isinstance(router.provider.provider_for(LM_STUDIO_MODEL), _mr.OpenAICompatibleProvider)
     assert router.complete("fast", MSGS, data_class="public", now=NOW)["simulated"] is True
 
 
@@ -430,6 +435,129 @@ def _openai_success(model_id: str = "nvidia/nemotron-3-ultra-550b-a55b:free", co
         "choices": [{"message": {"role": "assistant", "content": content}}],
         "usage": {"prompt_tokens": 12, "completion_tokens": 7},
     })
+
+
+def test_local_lm_studio_provider_uses_openai_chat_endpoint_without_api_key() -> None:
+    transport = FakeHttpTransport(_openai_success(LM_STUDIO_MODEL))
+    provider = _mr.OpenAICompatibleProvider("http://127.0.0.1:1234/v1", transport=transport)
+
+    response = provider.complete(model_id=LM_STUDIO_MODEL, messages=MSGS, max_tokens=8, now=NOW)
+
+    request = json.loads(transport.calls[0]["body"].decode("utf-8"))
+    assert response.provider == "openai-compatible" and response.simulated is False
+    assert transport.calls[0]["url"] == "http://127.0.0.1:1234/v1/chat/completions"
+    assert "Authorization" not in transport.calls[0]["headers"]
+    assert request["model"] == LM_STUDIO_MODEL and request["messages"] == MSGS
+
+
+def test_provider_pool_dispatches_each_model_to_its_configured_endpoint(monkeypatch) -> None:
+    hosted_id = TABLE["classes"]["fast"]["primary"]
+    hosted_transport = FakeHttpTransport(
+        _http_json(200, {"data": {"requests_per_day": 50}}),
+        _openai_success(hosted_id),
+    )
+    local_transport = FakeHttpTransport(_openai_success(LM_STUDIO_MODEL))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "environment-only-test-key")
+    hosted = _mr.OpenAICompatibleProvider("https://openrouter.ai/api/v1", transport=hosted_transport)
+    local = _mr.OpenAICompatibleProvider("http://127.0.0.1:1234/v1", transport=local_transport)
+    pool = _mr.ModelProviderPool({hosted_id: hosted, LM_STUDIO_MODEL: local})
+
+    assert pool.provider_for(hosted_id) is hosted
+    assert pool.provider_for(LM_STUDIO_MODEL) is local
+
+
+def test_restricted_request_fails_closed_when_local_endpoint_is_down(tmp_path: Path) -> None:
+    class OfflineTransport:
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        def request(self, method, url, *, headers, body=None, timeout=30.0):
+            self.calls.append({"method": method, "url": url, "body": body})
+            raise TimeoutError("local model unavailable")
+
+    hosted_transport = FakeHttpTransport()
+    local_transport = OfflineTransport()
+    hosted = _mr.OpenAICompatibleProvider("https://openrouter.ai/api/v1", transport=hosted_transport)
+    local = _mr.OpenAICompatibleProvider("http://127.0.0.1:1234/v1", transport=local_transport)
+    provider_map = {
+        model_id: hosted
+        for model_id, metadata in TABLE["models"].items()
+        if metadata["endpoint_tier"] != "local"
+    }
+    provider_map[LM_STUDIO_MODEL] = local
+    pool = _mr.ModelProviderPool(provider_map)
+    audit = _audit.AuditLogger(audit_path=tmp_path / "audit.jsonl", incidents_dir=tmp_path / "inc")
+    router = _mr.ModelRouter(
+        provider=pool,
+        routing_table=TABLE,
+        integration_status=VERIFIED_OPENROUTER,
+        request_budget=_mr.RequestBudget(),
+        audit_logger=audit,
+    )
+    synthetic_message = [{"role": "user", "content": "synthetic restricted-data marker"}]
+
+    with pytest.raises(_mr.ModelRoutingExhaustedError):
+        router.complete("fast", synthetic_message, data_class="restricted", now=NOW)
+
+    assert len(local_transport.calls) == 1
+    assert b"synthetic restricted-data marker" in local_transport.calls[0]["body"]
+    assert hosted_transport.calls == []
+    assert len(_events(tmp_path)) == 1 and _events(tmp_path)[0]["outcome"] == "failure"
+
+
+def test_local_tier_refuses_remote_provider_before_request() -> None:
+    remote_transport = FakeHttpTransport()
+    remote = _mr.OpenAICompatibleProvider("https://hosted.invalid/v1", transport=remote_transport)
+    hosted = _mr.MockProvider()
+    provider_map = {
+        model_id: hosted
+        for model_id, metadata in TABLE["models"].items()
+        if metadata["endpoint_tier"] != "local"
+    }
+    provider_map[LM_STUDIO_MODEL] = remote
+    router = _mr.ModelRouter(
+        provider=_mr.ModelProviderPool(provider_map),
+        routing_table=TABLE,
+        request_budget=_mr.RequestBudget(),
+    )
+
+    with pytest.raises(_mr.ProviderNotConfiguredError, match="loopback-only"):
+        router.complete("fast", MSGS, data_class="restricted", now=NOW)
+
+    assert remote_transport.calls == [] and hosted.calls == []
+
+
+def test_hosted_quota_falls_back_to_local_endpoint_for_public_data(monkeypatch) -> None:
+    hosted_id = TABLE["classes"]["fast"]["primary"]
+    hosted_transport = FakeHttpTransport(
+        _http_json(200, {"data": {"requests_per_day": 50}}),
+        _mr.HttpResponse(429, b"quota exhausted"),
+    )
+    local_transport = FakeHttpTransport(_openai_success(LM_STUDIO_MODEL))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "environment-only-test-key")
+    hosted = _mr.OpenAICompatibleProvider("https://openrouter.ai/api/v1", transport=hosted_transport)
+    local = _mr.OpenAICompatibleProvider("http://127.0.0.1:1234/v1", transport=local_transport)
+    provider_map = {
+        model_id: hosted
+        for model_id, metadata in TABLE["models"].items()
+        if metadata["endpoint_tier"] != "local"
+    }
+    provider_map[LM_STUDIO_MODEL] = local
+    router = _mr.ModelRouter(
+        provider=_mr.ModelProviderPool(provider_map),
+        routing_table=TABLE,
+        integration_status=VERIFIED_OPENROUTER,
+        request_budget=_mr.RequestBudget(),
+    )
+
+    result = router.complete("fast", MSGS, data_class="public", now=NOW)
+
+    assert result["model_id"] == LM_STUDIO_MODEL and result["fallback_used"] is True
+    assert [call["url"] for call in hosted_transport.calls] == [
+        "https://openrouter.ai/api/v1/key",
+        "https://openrouter.ai/api/v1/chat/completions",
+    ]
+    assert local_transport.calls[0]["url"] == "http://127.0.0.1:1234/v1/chat/completions"
 
 
 @pytest.mark.parametrize(("status", "error_type", "retryable"), [
@@ -589,9 +717,12 @@ def test_configuration_errors_open_incident_and_never_fall_back(monkeypatch, tmp
 def test_critical_request_reserve_alerts_at_80_percent_and_breaks_at_100_percent(tmp_path: Path) -> None:
     sink: list[dict] = []
     budget = _mr.RequestBudget(tmp_path / "request-budget.sqlite3", daily_limit=5)
+    table = copy.deepcopy(TABLE)
+    for config in table["classes"].values():
+        config["fallbacks"] = [model_id for model_id in config["fallbacks"] if model_id != LM_STUDIO_MODEL]
     router = _mr.ModelRouter(
         provider=_mr.MockProvider(),
-        routing_table=TABLE,
+        routing_table=table,
         request_budget=budget,
         alert_sink=sink.append,
     )
@@ -680,6 +811,28 @@ def test_live_openrouter_smoke() -> None:
         now=datetime.now(timezone.utc),
     )
     assert response.simulated is False and response.model_id == "nvidia/nemotron-3-ultra-550b-a55b:free"
+
+
+@pytest.mark.live
+@pytest.mark.skipif(
+    os.environ.get("SILICIUM_LIVE_LOCAL") != "1",
+    reason="set SILICIUM_LIVE_LOCAL=1 to opt into the synthetic LM Studio smoke test",
+)
+def test_live_lm_studio_smoke() -> None:
+    base_url = os.environ.get(
+        "SILICIUM_LOCAL_BASE_URL", _mr.OpenAICompatibleProvider.DEFAULT_LOCAL_URL
+    )
+    model_id = os.environ.get("SILICIUM_LOCAL_MODEL_ID", LM_STUDIO_MODEL)
+    provider = _mr.OpenAICompatibleProvider(base_url)
+    if not provider.is_loopback:
+        pytest.fail("the LM Studio smoke test only permits a loopback endpoint")
+    response = provider.complete(
+        model_id=model_id,
+        messages=[{"role": "user", "content": "Reply only OK. This is a synthetic local smoke test."}],
+        max_tokens=8,
+        now=datetime.now(timezone.utc),
+    )
+    assert response.simulated is False and response.model_id == model_id
 
 
 def test_unverified_openrouter_provider_is_not_invoked_by_router(monkeypatch) -> None:

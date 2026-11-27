@@ -7,9 +7,9 @@ research). Only this module knows concrete provider model IDs, read from
 Behaviour
 ---------
 * **Fallback chain.** Primary model first, then each fallback in order. Capacity
-  failures can move to the next model; a ``429`` stops the entire chain because
-  hosted free models share one account quota. ``400`` and provider-configuration
-  errors are non-retryable and never fall back.
+  failures can move to the next model. A hosted ``429`` stops attempts on other
+  hosted models but may continue to the local model. ``400`` and provider
+  configuration errors are non-retryable and never fall back.
 * **Exhaustion.** If every model fails, a ``system_failure`` incident is logged that
   references ``INC-20261125-CAP1`` (the Phase 0 provider-capacity incident) and
   ``ModelRoutingExhaustedError`` is raised. Provider capacity is a runtime
@@ -20,11 +20,11 @@ Behaviour
   (customer-support alerts) continue on the cheapest ``fast`` model. The cap is
   checked before a call, so a single call can overshoot by at most one call's cost
   (bounded by ``max_tokens_per_call``). The spend day is the UTC calendar day.
-* **Provider interface.** ``ModelProvider`` is the only seam to a real gateway.
-  While ``openrouter`` is ``unavailable`` the router uses ``MockProvider``, which is
-  deterministic, credential-free and always flagged ``simulated``. If the status is
+* **Provider interface.** ``ModelProvider`` is the only seam to a model gateway.
+  While ``openrouter`` is ``unavailable``, hosted IDs use ``MockProvider`` and
+  local IDs use the loopback OpenAI-compatible provider. If the status is
   ``verified`` but no provider was injected, construction fails closed instead of
-  silently mocking.
+  silently mocking. A local outage never makes restricted data eligible for hosting.
 * **Request budget.** Hosted free-tier calls persist request counts in SQLite under
   ``SILICIUM_DATA_DIR`` (or the user-local state directory), enforce 20 requests per
   rolling minute and the key's daily limit (50 by default), and reserve 20% for
@@ -223,11 +223,12 @@ class UrllibHttpTransport:
 
 
 class OpenAICompatibleProvider(ModelProvider):
-    """OpenAI-style chat client for OpenRouter and later local model servers."""
+    """OpenAI-style chat client for hosted and loopback local inference servers."""
 
     simulated = False
     MAX_RESPONSE_BYTES = 1_048_576
     DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1"
+    DEFAULT_LOCAL_URL = "http://127.0.0.1:1234/v1"
 
     def __init__(
         self,
@@ -246,6 +247,7 @@ class OpenAICompatibleProvider(ModelProvider):
         self.transport = transport or UrllibHttpTransport()
         self.timeout = timeout
         self._is_openrouter = parsed.hostname == "openrouter.ai" or bool(parsed.hostname and parsed.hostname.endswith(".openrouter.ai"))
+        self.is_loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
         self.name = "openrouter" if self._is_openrouter else "openai-compatible"
         if self._is_openrouter and api_key is not None:
             raise ValueError("OpenRouter credentials must be read from OPENROUTER_API_KEY")
@@ -363,6 +365,46 @@ class OpenAICompatibleProvider(ModelProvider):
             )
 
 
+class ModelProviderPool(ModelProvider):
+    """Dispatch configured model IDs to reusable OpenAI-compatible provider clients."""
+
+    name = "multi-endpoint"
+    simulated = False
+
+    def __init__(self, providers: Mapping[str, ModelProvider]) -> None:
+        if not providers or any(not isinstance(model_id, str) or not model_id for model_id in providers):
+            raise ValueError("providers must map non-empty model IDs to providers")
+        if any(not isinstance(provider, ModelProvider) for provider in providers.values()):
+            raise TypeError("every model provider mapping must implement ModelProvider")
+        self.providers = dict(providers)
+        self.simulated = all(provider.simulated for provider in self.providers.values())
+
+    def provider_for(self, model_id: str) -> ModelProvider:
+        try:
+            return self.providers[model_id]
+        except KeyError:
+            raise ProviderNotConfiguredError(
+                f"No provider is configured for model '{model_id}'"
+            ) from None
+
+    def price_per_1k_tokens(self, model_id: str) -> float:
+        return self.provider_for(model_id).price_per_1k_tokens(model_id)
+
+    def complete(
+        self, *, model_id: str, messages: list[dict[str, Any]], max_tokens: int, now: datetime
+    ) -> ProviderResponse:
+        return self.provider_for(model_id).complete(
+            model_id=model_id, messages=messages, max_tokens=max_tokens, now=now
+        )
+
+    def get_request_limits(self) -> dict[str, int]:
+        for provider in self.providers.values():
+            get_limits = getattr(provider, "get_request_limits", None)
+            if callable(get_limits):
+                return get_limits()
+        return {}
+
+
 # SIMULATED rates for the credential-free mock. They are not real provider pricing.
 SIMULATED_PRICE_PER_1K: dict[str, float] = {
     "google/gemini-2.5-flash": 0.0005,
@@ -426,15 +468,25 @@ class MockProvider(ModelProvider):
         return ProviderResponse(model_id, content, input_tokens, output_tokens, cost, self.name, self.simulated)
 
 
-def build_default_provider(integration_status: dict[str, Any] | None = None) -> ModelProvider:
-    """Mock while ``openrouter`` is unavailable. Fail closed if it is verified but not injected."""
+def build_default_provider(
+    integration_status: dict[str, Any] | None = None,
+    routing_table: dict[str, Any] | None = None,
+) -> ModelProvider:
+    """Use a local client for local-tier models and deterministic mocks for unverified hosting."""
     status = integration_status
     if status is None:
         status = json.loads(INTEGRATION_STATUS_PATH.read_text(encoding="utf-8"))
     gateway_state = status.get("integrations", {}).get("openrouter", {}).get("status", "unavailable")
     if gateway_state == "verified":
         raise ProviderNotConfiguredError("openrouter is 'verified' but no ModelProvider was injected; refusing to fall back to the mock")
-    return MockProvider()
+    table = routing_table if routing_table is not None else json.loads(ROUTING_TABLE_PATH.read_text(encoding="utf-8"))
+    hosted = MockProvider()
+    local = OpenAICompatibleProvider(os.environ.get("SILICIUM_LOCAL_BASE_URL", OpenAICompatibleProvider.DEFAULT_LOCAL_URL))
+    providers = {
+        model_id: local if metadata["endpoint_tier"] == "local" else hosted
+        for model_id, metadata in table["models"].items()
+    }
+    return ModelProviderPool(providers)
 
 
 # ---------------------------------------------------------------- spend ledger
@@ -699,7 +751,8 @@ class ModelRouter:
     ) -> None:
         table = routing_table if routing_table is not None else json.loads(ROUTING_TABLE_PATH.read_text(encoding="utf-8"))
         self.table = self._validate_table(table)
-        self.provider = provider or build_default_provider(integration_status)
+        self.provider = provider or build_default_provider(integration_status, self.table)
+        self._openrouter_verified = False
         if not self.provider.simulated and self.provider.name == "openrouter":
             status = integration_status
             if status is None:
@@ -708,6 +761,15 @@ class ModelRouter:
             if gateway_state != "verified":
                 raise ProviderNotConfiguredError(
                     "openrouter is not verified; refusing to invoke the live provider"
+                )
+            self._openrouter_verified = True
+        elif isinstance(self.provider, ModelProviderPool):
+            if any(provider.name == "openrouter" for provider in self.provider.providers.values()):
+                status = integration_status
+                if status is None:
+                    status = json.loads(INTEGRATION_STATUS_PATH.read_text(encoding="utf-8"))
+                self._openrouter_verified = (
+                    status.get("integrations", {}).get("openrouter", {}).get("status") == "verified"
                 )
         self.ledger = ledger or SpendLedger()
         self.request_budget = request_budget or RequestBudget(default_request_budget_path())
@@ -906,9 +968,49 @@ class ModelRouter:
 
         attempts: list[dict[str, Any]] = []
         request_alerts: list[dict[str, Any]] = []
-        for model_id in safe_chain:
-            if self.table["models"][model_id]["endpoint_tier"] == "free":
-                get_limits = getattr(self.provider, "get_request_limits", None)
+        hosted_fallback_stopped = False
+        for index, model_id in enumerate(safe_chain):
+            endpoint_tier = self.table["models"][model_id]["endpoint_tier"]
+            model_provider = self._provider_for(model_id)
+            if hosted_fallback_stopped and endpoint_tier != "local":
+                attempts.append({
+                    "model_id": model_id, "attempt": 1, "outcome": "skipped",
+                    "status_code": 429, "error": "hosted fallback stopped after quota exhaustion",
+                    "retryable": False,
+                })
+                continue
+            if endpoint_tier == "local" and not self._is_local_provider(model_provider):
+                self._log(
+                    "model_route", "blocked", "critical", model_class, task_id, agent, started,
+                    inputs={"model_class": model_class, "data_class": data_class},
+                    outputs={"reason": "local_tier_provider_not_loopback", "model_id": model_id},
+                    error="A local-tier model must use a loopback-only provider",
+                )
+                raise ProviderNotConfiguredError("A local-tier model must use a loopback-only provider")
+            if model_provider.name == "openrouter" and not self._openrouter_verified:
+                message = "openrouter is not verified; refusing to invoke the live provider"
+                if self._has_local_fallback(safe_chain, index):
+                    attempts.append({
+                        "model_id": model_id, "attempt": 1, "outcome": "error",
+                        "status_code": 503, "error": message, "retryable": True,
+                    })
+                    self._log(
+                        "model_route", "failure", "high", model_class, task_id, agent, started,
+                        inputs={"model_class": model_class, "data_class": data_class},
+                        outputs={"reason": "integration_not_verified", "model_id": model_id, "fallback_to_local": True},
+                        error=message,
+                    )
+                    hosted_fallback_stopped = True
+                    continue
+                self._log(
+                    "model_route", "blocked", "high", model_class, task_id, agent, started,
+                    inputs={"model_class": model_class, "data_class": data_class},
+                    outputs={"reason": "integration_not_verified", "model_id": model_id},
+                    error=message,
+                )
+                raise ProviderNotConfiguredError(message)
+            if endpoint_tier == "free":
+                get_limits = getattr(model_provider, "get_request_limits", None)
                 if callable(get_limits):
                     try:
                         limits = get_limits()
@@ -933,6 +1035,19 @@ class ModelRouter:
                     budget = self.request_budget.reserve(current, critical=critical)
                 except RequestBudgetError as exc:
                     self._emit_request_alerts(getattr(exc, "alerts", []), current)
+                    if self._has_local_fallback(safe_chain, index):
+                        attempts.append({
+                            "model_id": model_id, "attempt": 1, "outcome": "error",
+                            "status_code": 429, "error": str(exc), "retryable": True,
+                        })
+                        self._log(
+                            "model_route", "failure", "high", model_class, task_id, agent, started,
+                            inputs={"model_class": model_class, "data_class": data_class, "critical": critical},
+                            outputs={"reason": type(exc).__name__, "request_budget": exc.state, "fallback_to_local": True},
+                            error=str(exc),
+                        )
+                        hosted_fallback_stopped = True
+                        continue
                     self._log(
                         "model_route", "blocked", "high" if isinstance(exc, RequestBudgetExhaustedError) else "medium",
                         model_class, task_id, agent, started,
@@ -944,7 +1059,7 @@ class ModelRouter:
                 request_alerts.extend(budget["alerts"])
                 self._emit_request_alerts(budget["alerts"], current)
             try:
-                resp = self.provider.complete(model_id=model_id, messages=messages, max_tokens=call_max, now=current)
+                resp = model_provider.complete(model_id=model_id, messages=messages, max_tokens=call_max, now=current)
             except ProviderError as exc:
                 attempts.append({"model_id": model_id, "attempt": 1, "outcome": "error", "status_code": exc.status_code, "error": str(exc), "retryable": exc.retryable})
                 if isinstance(exc, ProviderConfigurationError):
@@ -957,6 +1072,15 @@ class ModelRouter:
                     )
                     raise
                 if isinstance(exc, ProviderQuotaError):
+                    if self._has_local_fallback(safe_chain, index):
+                        self._log(
+                            "model_route", "failure", "high", model_class, task_id, agent, started,
+                            inputs={"model_class": model_class, "data_class": data_class},
+                            outputs={"attempts": attempts, "fallback_to_local": True},
+                            error=str(exc),
+                        )
+                        hosted_fallback_stopped = True
+                        continue
                     self._log(
                         "model_route", "failure", "high", model_class, task_id, agent, started,
                         inputs={"model_class": model_class, "data_class": data_class},
@@ -1003,6 +1127,27 @@ class ModelRouter:
         )
 
     # -- internals
+
+    def _provider_for(self, model_id: str) -> ModelProvider:
+        if isinstance(self.provider, ModelProviderPool):
+            return self.provider.provider_for(model_id)
+        return self.provider
+
+    @staticmethod
+    def _is_local_provider(provider: ModelProvider) -> bool:
+        if provider.simulated:
+            return True
+        if isinstance(provider, OpenAICompatibleProvider):
+            return provider.is_loopback
+        return getattr(provider, "local_only", False) is True
+
+    def _has_local_fallback(self, chain: list[str], index: int) -> bool:
+        for model_id in chain[index + 1:]:
+            if self.table["models"][model_id]["endpoint_tier"] != "local":
+                continue
+            if self._is_local_provider(self._provider_for(model_id)):
+                return True
+        return False
 
     @staticmethod
     def _check_response(resp: ProviderResponse, requested: str) -> None:
