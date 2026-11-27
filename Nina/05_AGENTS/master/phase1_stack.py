@@ -46,11 +46,13 @@ def build_phase1_stack(
     *,
     provider: Any | None = None,
     routing_table: dict[str, Any] | None = None,
+    request_budget: Any | None = None,
     policy_index: dict[str, Any] | None = None,
     integration_status: dict[str, Any] | None = None,
     adapter: Any | None = None,
     ledger: Any | None = None,
     alert_sink: Callable[[dict[str, Any]], None] | None = None,
+    advisory_enabled: bool = False,
 ) -> Phase1Stack:
     base_dir = Path(base_dir)
     base_dir.mkdir(parents=True, exist_ok=True)
@@ -63,13 +65,15 @@ def build_phase1_stack(
     memory = _mem.MemoryStore(stores_dir=base_dir / "memory")
     router = _router.ModelRouter(
         provider=provider, routing_table=routing_table, integration_status=integration_status,
-        ledger=ledger, audit_logger=audit, alert_sink=alert_sink,
+        ledger=ledger, request_budget=request_budget or _router.RequestBudget(base_dir / "request_budget.sqlite3"),
+        audit_logger=audit, alert_sink=alert_sink,
     )
     ops = _ops.OperationsAgent(gateway=gateway)
     channel = adapter or _adapter.TelegramApprovalAdapter(integration_status=integration_status)
     master = _master.MasterAgent(
         gateway=gateway, operations_agent=ops, memory_store=memory,
-        truth_resolver=resolver, model_router=router, approval_adapter=channel, audit_logger=audit,
+        truth_resolver=resolver, model_router=router, advisory_enabled=advisory_enabled,
+        approval_adapter=channel, audit_logger=audit,
     )
     return Phase1Stack(
         base_dir=base_dir, fixture=fixture, approvals=approvals, audit=audit, resolver=resolver, gateway=gateway,

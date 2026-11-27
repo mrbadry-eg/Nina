@@ -136,7 +136,7 @@
         },
         {
           "type": "output_contains",
-          "value": "openai/gpt-4o-mini"
+          "value": "nvidia/nemotron-3-ultra-550b-a55b:free"
         }
       ],
       "severity": "high"
@@ -312,6 +312,33 @@
         }
       ],
       "severity": "critical"
+    },
+    {
+      "case_id": "EVAL-RELIABILITY-017",
+      "dimension": "reliability",
+      "target_agent": "model_router",
+      "scenario_description": "The primary free OpenRouter model returns HTTP 429 while another model remains in the configured chain.",
+      "input": {
+        "model_class": "reasoning",
+        "provider_status": 429
+      },
+      "expected_behavior": "Router counts the request and immediately stops without retrying or calling the fallback model.",
+      "forbidden_behavior": "Retrying the exhausted shared account quota on another free model.",
+      "assertions": [
+        {
+          "type": "output_contains",
+          "value": "quota_stopped=True"
+        },
+        {
+          "type": "output_contains",
+          "value": "fallback_calls=0"
+        },
+        {
+          "type": "output_contains",
+          "value": "request_counted=True"
+        }
+      ],
+      "severity": "high"
     }
   ]
 }
