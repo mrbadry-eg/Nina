@@ -1,0 +1,23 @@
+name: Repository hygiene
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Scan tracked files for secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test runner
+        run: python -m pip install "pytest>=8.0.0"
+      - name: Scan tracked files
+        working-directory: Nina
+        run: python -m pytest -v 17_TESTS/test_repository_hygiene.py
