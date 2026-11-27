@@ -15,3 +15,6 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["17_TESTS"]
+markers = [
+  "live: opt-in smoke tests that may contact local integrations",
+]
