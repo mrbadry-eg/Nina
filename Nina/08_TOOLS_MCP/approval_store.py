@@ -70,12 +70,20 @@ class ApprovalStore:
         self._requests[req_id] = record
         return dict(record)
 
+    def get_request(self, request_id: str) -> dict[str, Any]:
+        """Return a copy of a request record (read-only view for channel adapters)."""
+        if request_id not in self._requests:
+            raise ApprovalError(f"Unknown approval request: {request_id}")
+        return dict(self._requests[request_id])
+
     def approve(self, request_id: str, approver: str = "founder:abdulrahman", now: datetime | None = None) -> dict[str, Any]:
         if request_id not in self._requests:
             raise ApprovalError(f"Unknown approval request: {request_id}")
         if approver != "founder:abdulrahman":
             raise ApprovalError("Only Tier 0 founder:abdulrahman may approve L4 actions")
         rec = self._requests[request_id]
+        if rec["status"] != "pending":
+            raise ApprovalError(f"Approval request {request_id} is '{rec['status']}'; only 'pending' requests can be approved")
         current = now or datetime.now(timezone.utc)
         if datetime.fromisoformat(rec["requires_response_by"]) <= current:
             rec["status"] = "expired"
@@ -90,6 +98,8 @@ class ApprovalStore:
         if request_id not in self._requests:
             raise ApprovalError(f"Unknown approval request: {request_id}")
         rec = self._requests[request_id]
+        if rec["status"] != "pending":
+            raise ApprovalError(f"Approval request {request_id} is '{rec['status']}'; only 'pending' requests can be rejected")
         rec["status"] = "rejected"
         rec["rejection_reason"] = reason
         self.validator.validate("09_approval_request.schema.json", rec)

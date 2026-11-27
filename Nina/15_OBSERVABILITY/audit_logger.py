@@ -112,6 +112,7 @@ class AuditLogger:
         description: str,
         affected_resources: list[str],
         detected_by: str,
+        related_incidents: list[str] | None = None,
     ) -> dict[str, Any]:
         incident: dict[str, Any] = {
             "incident_id": _gen_id("INC"),
@@ -127,7 +128,7 @@ class AuditLogger:
             "resolved_at": None,
             "root_cause": None,
             "prevention_actions": [],
-            "related_incidents": [],
+            "related_incidents": list(related_incidents or []),
         }
         self.validator.validate("16_incident.schema.json", incident)
         out_file = self.incidents_dir / f"{incident['incident_id']}.json"
