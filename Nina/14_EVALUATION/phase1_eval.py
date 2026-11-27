@@ -55,7 +55,8 @@ def _events(base: Path) -> list[dict[str, Any]]:
 def _non_logging_paid_test_table() -> dict[str, Any]:
     table = json.loads(json.dumps(ROUTING_TABLE))
     for metadata in table["models"].values():
-        if metadata["endpoint_tier"] == "paid":
+        if metadata["endpoint_tier"] == "free":
+            metadata["endpoint_tier"] = "paid"
             metadata["logs_prompts"] = False
     return table
 
@@ -123,15 +124,17 @@ def case_008(tmp: Path) -> Check:
 
 
 def case_009(tmp: Path) -> Check:
-    provider = _router.MockProvider().script(REASONING[0], _router.ProviderCapacityError()).script(REASONING[1], _router.ProviderQuotaError())
-    router = _router.ModelRouter(provider=provider)
+    provider = _router.MockProvider().script(REASONING[0], _router.ProviderCapacityError())
+    router = _router.ModelRouter(provider=provider, request_budget=_router.RequestBudget())
     res = router.complete("reasoning", MSGS, data_class="public", now=NOW)
-    walked = res["fallback_used"] and [a["status_code"] for a in res["attempts"]] == [503, 429, 200] and res["model_id"] == REASONING[2]
+    walked = res["fallback_used"] and [a["status_code"] for a in res["attempts"]] == [503, 200] and res["model_id"] == REASONING[1]
 
     down = _router.MockProvider()
     for model in REASONING:
         down.fail_always(model, _router.ProviderCapacityError())
-    s = _stack.build_phase1_stack(tmp, provider=down, routing_table=_non_logging_paid_test_table())
+    s = _stack.build_phase1_stack(
+        tmp, provider=down, routing_table=_non_logging_paid_test_table(), advisory_enabled=True
+    )
     plan = s.master.plan_and_delegate(_task(suffix="P1C1"))
     incidents = [json.loads(p.read_text(encoding="utf-8")) for p in (tmp / "incidents").glob("INC-*.json")]
     linked = len(incidents) == 1 and incidents[0]["related_incidents"] == ["INC-20261125-CAP1"]
@@ -140,7 +143,7 @@ def case_009(tmp: Path) -> Check:
 
 
 def case_010(tmp: Path) -> Check:
-    router = _router.ModelRouter(provider=_router.MockProvider())
+    router = _router.ModelRouter(provider=_router.MockProvider(), request_budget=_router.RequestBudget(tmp / "budget.sqlite3"))
     router.ledger.add("2026-11-25", 8.0)
     first = router.complete("fast", MSGS, data_class="public", now=NOW)
     second = router.complete("fast", MSGS, data_class="public", now=NOW)
@@ -152,7 +155,7 @@ def case_010(tmp: Path) -> Check:
     except _router.CircuitBreakerOpenError:
         blocked = True
     critical = router.complete("reasoning", MSGS, critical=True, data_class="public", now=NOW)
-    cheap = critical["model_class_used"] == "fast" and critical["model_id"] == "openai/gpt-4o-mini"
+    cheap = critical["model_class_used"] == "fast" and critical["model_id"] == ROUTING["fast"]["primary"]
     return soft_once and blocked and cheap, f"soft_once={soft_once} breaker_blocks_non_critical={blocked} critical_on_cheapest_fast={cheap}"
 
 
@@ -338,6 +341,21 @@ def case_016(tmp: Path) -> Check:
     )
 
 
+def case_017(tmp: Path) -> Check:
+    provider = _router.MockProvider().script(REASONING[0], _router.ProviderQuotaError())
+    router = _router.ModelRouter(provider=provider, request_budget=_router.RequestBudget(tmp / "budget.sqlite3"))
+    try:
+        router.complete("reasoning", MSGS, data_class="public", now=NOW)
+        quota_stopped = False
+    except _router.ProviderQuotaError:
+        quota_stopped = True
+    no_fallback = [call["model_id"] for call in provider.calls] == [REASONING[0]]
+    request_counted = router.request_state(NOW)["requests"] == 1
+    return quota_stopped and no_fallback and request_counted, (
+        f"quota_stopped={quota_stopped} fallback_calls={len(provider.calls) - 1} request_counted={request_counted}"
+    )
+
+
 CASES: dict[str, Callable[[Path], Check]] = {
     "EVAL-FACTUALITY-006": case_006,
     "EVAL-RELIABILITY-007": case_007,
@@ -350,6 +368,7 @@ CASES: dict[str, Callable[[Path], Check]] = {
     "EVAL-POLICY-014": case_014,
     "EVAL-SECURITY-015": case_015,
     "EVAL-SECURITY-016": case_016,
+    "EVAL-RELIABILITY-017": case_017,
 }
 
 

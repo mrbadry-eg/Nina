@@ -19,7 +19,7 @@
 - `09_N8N/` — Deterministic workflow definitions (post-Milestone 1)
 - `10_OPENCLAW/` — OpenClaw messaging runtime configuration (post-Milestone 1)
 - `11_ANTIGRAVITY/` — Engineering-plane rules and dev/prod isolation boundaries
-- `12_MODEL_ROUTING/` — OpenRouter task-class routing table & cost caps (`routing_table.json`)
+- `12_MODEL_ROUTING/` — OpenAI-compatible OpenRouter provider, task-class routing, and persistent free-tier request budgeting (`routing_table.json`)
 - `13_SECURITY/` — Security model, redaction, and SHA-256 payload-bound approval enforcement
 - `14_EVALUATION/` — Evaluation framework and deterministic evaluation runner
 - `15_OBSERVABILITY/` — Append-only JSONL audit sink (`audit/`) and incident logs (`incidents/`)

@@ -9,10 +9,9 @@ Phase 1 wiring (every component is optional; with none supplied the Milestone 1 
                        non-authoritative live data blocks the approval request (spec 4.1, 5.1).
                        Before an approved L4 write the Operations Agent re-reads the order and the
                        Tool Gateway enforces freshness of that evidence (approval is not consumed on refusal).
-* ``model_router``     Planning is routed by ``model_class`` ("reasoning"); the Master never names a provider
-                       model. The routed call is ADVISORY (labelled ``inference``, simulated while the gateway
-                       is unavailable) and fills the AgentTask model/usage fields. Decisions stay deterministic.
-                       If routing is unavailable (breaker open, chain exhausted) planning degrades gracefully.
+* ``model_router``     Planning may be routed by ``model_class`` ("reasoning"); the Master never names a provider
+                       model. Advisory routing is opt-in (default off) and remains labelled ``inference``.
+                       Decisions stay deterministic; disabled or unavailable routing degrades gracefully.
 * ``approval_adapter`` Renders the ``APR-*`` request for the Founder, dispatches it, and applies the Founder's
                        decision back to the ApprovalStore.
 * ``audit_logger``     One orchestration audit event per Master step, schema-validated (17).
@@ -49,6 +48,7 @@ class MasterAgent:
         memory_store: Any,
         truth_resolver: Any | None = None,
         model_router: Any | None = None,
+        advisory_enabled: bool = False,
         approval_adapter: Any | None = None,
         audit_logger: Any | None = None,
     ) -> None:
@@ -57,6 +57,7 @@ class MasterAgent:
         self.memory_store = memory_store
         self.truth_resolver = truth_resolver
         self.model_router = model_router
+        self.advisory_enabled = advisory_enabled
         self.approval_adapter = approval_adapter
         self.audit = audit_logger
         self.validator = _sv.CanonicalSchemaValidator()
@@ -270,6 +271,12 @@ class MasterAgent:
         """Route the planning call by model_class. Advisory only: never a source of fact."""
         if self.model_router is None:
             return None, None
+        if not self.advisory_enabled:
+            return None, {
+                "error": "AdvisoryRoutingDisabledError",
+                "reason": "model advisory routing is disabled by configuration",
+                "fallback": "deterministic planning without model advisory",
+            }
         messages = [
             {"role": "system", "content": "Silicium Master planner. Internal English only. Output is advisory inference, never a source of fact."},
             {"role": "user", "content": _sv.canonical_json({"objective": task["objective"], "inputs": task["inputs"], "constraints": task["constraints"]})},
@@ -278,7 +285,16 @@ class MasterAgent:
             route = self.model_router.complete(
                 "reasoning", messages, task_id=task["task_id"], agent=self.AGENT_ID, data_class="internal", now=now
             )
-        except (_router.CircuitBreakerOpenError, _router.ModelRoutingExhaustedError, _router.DataPolicyViolationError) as exc:
+        except (
+            _router.CircuitBreakerOpenError,
+            _router.ModelRoutingExhaustedError,
+            _router.DataPolicyViolationError,
+            _router.RequestBudgetError,
+            _router.ProviderQuotaError,
+            _router.ProviderConfigurationError,
+            _router.ProviderRequestError,
+            _router.ProviderResponseError,
+        ) as exc:
             return None, {"error": type(exc).__name__, "reason": str(exc), "fallback": "deterministic planning without model advisory"}
         return route, None
 

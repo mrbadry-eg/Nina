@@ -8,46 +8,39 @@
     "circuit_breaker_ratio": 1.0
   },
   "models": {
-    "google/gemini-2.5-flash": {"endpoint_tier": "paid", "logs_prompts": true},
-    "anthropic/claude-3.5-haiku": {"endpoint_tier": "paid", "logs_prompts": true},
-    "openai/gpt-4o-mini": {"endpoint_tier": "paid", "logs_prompts": true},
-    "anthropic/claude-sonnet-4": {"endpoint_tier": "paid", "logs_prompts": true},
-    "google/gemini-2.5-pro": {"endpoint_tier": "paid", "logs_prompts": true},
-    "openai/gpt-4o": {"endpoint_tier": "paid", "logs_prompts": true},
-    "perplexity/sonar-pro": {"endpoint_tier": "paid", "logs_prompts": true},
     "nvidia/nemotron-3-ultra-550b-a55b:free": {"endpoint_tier": "free", "logs_prompts": true},
     "nvidia/nemotron-3.5-super-vl:free": {"endpoint_tier": "free", "logs_prompts": true}
   },
   "classes": {
     "fast": {
-      "primary": "google/gemini-2.5-flash",
-      "fallbacks": ["anthropic/claude-3.5-haiku", "openai/gpt-4o-mini"],
+      "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
       "max_tokens_per_call": 2048
     },
     "reasoning": {
-      "primary": "anthropic/claude-sonnet-4",
-      "fallbacks": ["google/gemini-2.5-pro", "openai/gpt-4o"],
-      "max_tokens_per_call": 8192
-    },
-    "creative": {
-      "primary": "anthropic/claude-sonnet-4",
-      "fallbacks": ["openai/gpt-4o", "google/gemini-2.5-pro"],
+      "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
       "max_tokens_per_call": 4096
     },
+    "creative": {
+      "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "max_tokens_per_call": 2048
+    },
     "vision": {
-      "primary": "google/gemini-2.5-pro",
-      "fallbacks": ["openai/gpt-4o", "anthropic/claude-sonnet-4"],
+      "primary": "nvidia/nemotron-3.5-super-vl:free",
+      "fallbacks": [],
       "max_tokens_per_call": 4096
     },
     "coding": {
-      "primary": "anthropic/claude-sonnet-4",
-      "fallbacks": ["google/gemini-2.5-pro", "openai/gpt-4o"],
-      "max_tokens_per_call": 8192
+      "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "max_tokens_per_call": 4096
     },
     "research": {
-      "primary": "perplexity/sonar-pro",
-      "fallbacks": ["google/gemini-2.5-pro"],
-      "max_tokens_per_call": 8192
+      "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "max_tokens_per_call": 4096
     }
   }
 }
