@@ -27,7 +27,8 @@ _probe = load_module("08_TOOLS_MCP/integration_probe.py", "silicium_integration_
 
 CASES_FILE = REPO_ROOT / "14_EVALUATION" / "cases" / "phase1_cases.json"
 NOW = datetime(2026, 11, 25, 12, 0, 0, tzinfo=timezone.utc)
-ROUTING = json.loads((REPO_ROOT / "12_MODEL_ROUTING" / "routing_table.json").read_text(encoding="utf-8"))["classes"]
+ROUTING_TABLE = json.loads((REPO_ROOT / "12_MODEL_ROUTING" / "routing_table.json").read_text(encoding="utf-8"))
+ROUTING = ROUTING_TABLE["classes"]
 REASONING = [ROUTING["reasoning"]["primary"], *ROUTING["reasoning"]["fallbacks"]]
 MSGS = [{"role": "user", "content": "evaluation probe"}]
 
@@ -49,6 +50,22 @@ def _task(order_id: str = "ORD-1042", suffix: str = "P1A1") -> dict[str, Any]:
 def _events(base: Path) -> list[dict[str, Any]]:
     p = base / "audit.jsonl"
     return [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
+
+
+def _non_logging_paid_test_table() -> dict[str, Any]:
+    table = json.loads(json.dumps(ROUTING_TABLE))
+    for metadata in table["models"].values():
+        if metadata["endpoint_tier"] == "paid":
+            metadata["logs_prompts"] = False
+    return table
+
+
+def _data_policy_table(chain: list[str], metadata: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    table = json.loads(json.dumps(ROUTING_TABLE))
+    table["classes"]["reasoning"]["primary"] = chain[0]
+    table["classes"]["reasoning"]["fallbacks"] = chain[1:]
+    table["models"].update(metadata)
+    return table
 
 
 def _product_record() -> dict[str, Any]:
@@ -108,13 +125,13 @@ def case_008(tmp: Path) -> Check:
 def case_009(tmp: Path) -> Check:
     provider = _router.MockProvider().script(REASONING[0], _router.ProviderCapacityError()).script(REASONING[1], _router.ProviderQuotaError())
     router = _router.ModelRouter(provider=provider)
-    res = router.complete("reasoning", MSGS, now=NOW)
+    res = router.complete("reasoning", MSGS, data_class="public", now=NOW)
     walked = res["fallback_used"] and [a["status_code"] for a in res["attempts"]] == [503, 429, 200] and res["model_id"] == REASONING[2]
 
     down = _router.MockProvider()
     for model in REASONING:
         down.fail_always(model, _router.ProviderCapacityError())
-    s = _stack.build_phase1_stack(tmp, provider=down)
+    s = _stack.build_phase1_stack(tmp, provider=down, routing_table=_non_logging_paid_test_table())
     plan = s.master.plan_and_delegate(_task(suffix="P1C1"))
     incidents = [json.loads(p.read_text(encoding="utf-8")) for p in (tmp / "incidents").glob("INC-*.json")]
     linked = len(incidents) == 1 and incidents[0]["related_incidents"] == ["INC-20261125-CAP1"]
@@ -125,16 +142,16 @@ def case_009(tmp: Path) -> Check:
 def case_010(tmp: Path) -> Check:
     router = _router.ModelRouter(provider=_router.MockProvider())
     router.ledger.add("2026-11-25", 8.0)
-    first = router.complete("fast", MSGS, now=NOW)
-    second = router.complete("fast", MSGS, now=NOW)
+    first = router.complete("fast", MSGS, data_class="public", now=NOW)
+    second = router.complete("fast", MSGS, data_class="public", now=NOW)
     soft_once = [a["type"] for a in first["alerts"]] == ["spend_soft_alert"] and second["alerts"] == []
     router.ledger.add("2026-11-25", 10.0)
     try:
-        router.complete("reasoning", MSGS, now=NOW)
+        router.complete("reasoning", MSGS, data_class="public", now=NOW)
         blocked = False
     except _router.CircuitBreakerOpenError:
         blocked = True
-    critical = router.complete("reasoning", MSGS, critical=True, now=NOW)
+    critical = router.complete("reasoning", MSGS, critical=True, data_class="public", now=NOW)
     cheap = critical["model_class_used"] == "fast" and critical["model_id"] == "openai/gpt-4o-mini"
     return soft_once and blocked and cheap, f"soft_once={soft_once} breaker_blocks_non_critical={blocked} critical_on_cheapest_fast={cheap}"
 
@@ -232,6 +249,8 @@ def case_014(tmp: Path) -> Check:
         by_id["POL-SHIPPING-COURIER-001"]["machine_values"]["sla_unfulfilled_hours"] == _ops.OperationsAgent.SLA_UNFULFILLED_HOURS
         and by_id["POL-PAYMENTS-001"]["machine_values"]["accepted_payment_methods"] == context["payment_methods"]
         and set(by_id["POL-DATA-MINIMIZATION-001"]["machine_values"]["audit_redaction_keys"]) == set(_audit.REDACT_KEYS)
+        and by_id["POL-DATA-MINIMIZATION-001"]["machine_values"]["model_call_data_policy"]["default_data_class"] == "internal"
+        and "| DM-11 |" in (bc / "policies" / "data_minimization_policy.md").read_text(encoding="utf-8")
     )
     bible = (bc / "BRAND_BIBLE.md").read_text(encoding="utf-8")
     bible_ok = all(f"BAN-0{i}" in bible for i in range(1, 8)) and "PROPOSED" in bible
@@ -272,6 +291,53 @@ def case_015(tmp: Path) -> Check:
     )
 
 
+def case_016(tmp: Path) -> Check:
+    free_model = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    paid_model = "test/paid-no-log"
+    local_model = "test/local-private"
+    metadata = {
+        free_model: {"endpoint_tier": "free", "logs_prompts": True},
+        paid_model: {"endpoint_tier": "paid", "logs_prompts": False},
+        local_model: {"endpoint_tier": "local", "logs_prompts": False},
+    }
+
+    blocked_provider = _router.MockProvider()
+    audit = _audit.AuditLogger(audit_path=tmp / "audit.jsonl", incidents_dir=tmp / "incidents")
+    free_only = _router.ModelRouter(
+        provider=blocked_provider, routing_table=_data_policy_table([free_model], metadata), audit_logger=audit
+    )
+    blocked = 0
+    for data_class in ("internal", "restricted"):
+        try:
+            free_only.complete("reasoning", MSGS, data_class=data_class, now=NOW)
+        except _router.DataPolicyViolationError:
+            blocked += 1
+    blocked_events = [event for event in _events(tmp) if event["outcome"] == "blocked"]
+    free_calls_blocked = not blocked_provider.calls and blocked == 2 and len(blocked_events) == 2
+
+    table = _data_policy_table([paid_model, free_model, local_model], metadata)
+    paid_provider = _router.MockProvider().script(paid_model, _router.ProviderCapacityError())
+    internal_route = _router.ModelRouter(provider=paid_provider, routing_table=table)
+    internal_result = internal_route.complete("reasoning", MSGS, data_class="internal", now=NOW)
+    internal_privacy_preserved = (
+        internal_result["model_id"] == local_model
+        and [call["model_id"] for call in paid_provider.calls] == [paid_model, local_model]
+    )
+
+    restricted_provider = _router.MockProvider()
+    restricted_route = _router.ModelRouter(provider=restricted_provider, routing_table=table)
+    restricted_result = restricted_route.complete("reasoning", MSGS, data_class="restricted", now=NOW)
+    restricted_local_only = (
+        restricted_result["model_id"] == local_model
+        and [call["model_id"] for call in restricted_provider.calls] == [local_model]
+    )
+    ok = free_calls_blocked and internal_privacy_preserved and restricted_local_only
+    return ok, (
+        f"free_calls_blocked={free_calls_blocked} internal_privacy_preserved={internal_privacy_preserved} "
+        f"restricted_local_only={restricted_local_only}"
+    )
+
+
 CASES: dict[str, Callable[[Path], Check]] = {
     "EVAL-FACTUALITY-006": case_006,
     "EVAL-RELIABILITY-007": case_007,
@@ -283,6 +349,7 @@ CASES: dict[str, Callable[[Path], Check]] = {
     "EVAL-ALIGNMENT-013": case_013,
     "EVAL-POLICY-014": case_014,
     "EVAL-SECURITY-015": case_015,
+    "EVAL-SECURITY-016": case_016,
 }
 
 

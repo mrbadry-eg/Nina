@@ -7,6 +7,17 @@
     "soft_alert_ratio": 0.8,
     "circuit_breaker_ratio": 1.0
   },
+  "models": {
+    "google/gemini-2.5-flash": {"endpoint_tier": "paid", "logs_prompts": true},
+    "anthropic/claude-3.5-haiku": {"endpoint_tier": "paid", "logs_prompts": true},
+    "openai/gpt-4o-mini": {"endpoint_tier": "paid", "logs_prompts": true},
+    "anthropic/claude-sonnet-4": {"endpoint_tier": "paid", "logs_prompts": true},
+    "google/gemini-2.5-pro": {"endpoint_tier": "paid", "logs_prompts": true},
+    "openai/gpt-4o": {"endpoint_tier": "paid", "logs_prompts": true},
+    "perplexity/sonar-pro": {"endpoint_tier": "paid", "logs_prompts": true},
+    "nvidia/nemotron-3-ultra-550b-a55b:free": {"endpoint_tier": "free", "logs_prompts": true},
+    "nvidia/nemotron-3.5-super-vl:free": {"endpoint_tier": "free", "logs_prompts": true}
+  },
   "classes": {
     "fast": {
       "primary": "google/gemini-2.5-flash",

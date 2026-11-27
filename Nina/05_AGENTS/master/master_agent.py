@@ -275,8 +275,10 @@ class MasterAgent:
             {"role": "user", "content": _sv.canonical_json({"objective": task["objective"], "inputs": task["inputs"], "constraints": task["constraints"]})},
         ]
         try:
-            route = self.model_router.complete("reasoning", messages, task_id=task["task_id"], agent=self.AGENT_ID, now=now)
-        except (_router.CircuitBreakerOpenError, _router.ModelRoutingExhaustedError) as exc:
+            route = self.model_router.complete(
+                "reasoning", messages, task_id=task["task_id"], agent=self.AGENT_ID, data_class="internal", now=now
+            )
+        except (_router.CircuitBreakerOpenError, _router.ModelRoutingExhaustedError, _router.DataPolicyViolationError) as exc:
             return None, {"error": type(exc).__name__, "reason": str(exc), "fallback": "deterministic planning without model advisory"}
         return route, None
 

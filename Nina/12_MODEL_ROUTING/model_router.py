@@ -51,6 +51,7 @@ AGENT_TASK_SCHEMA_PATH = REPO_ROOT / "01_ARCHITECTURE" / "schemas" / "07_agent_t
 REFERENCE_INCIDENT_ID = "INC-20261125-CAP1"
 FOUNDER_PRINCIPAL = "founder:abdulrahman"
 CRITICAL_FALLBACK_CLASS = "fast"
+DATA_CLASS_RANK = {"public": 0, "internal": 1, "restricted": 2}
 
 
 # ---------------------------------------------------------------------- errors
@@ -66,6 +67,10 @@ class RoutingTableError(RoutingError, ValueError):
 
 class UnknownModelClassError(RoutingError, ValueError):
     """The requested model_class is not defined. The router never guesses a default."""
+
+
+class DataPolicyViolationError(RoutingError):
+    """No endpoint in the routing chain is permitted to receive this data class."""
 
 
 class ProviderNotConfiguredError(RoutingError):
@@ -305,6 +310,23 @@ class ModelRouter:
                 raise RoutingTableError(f"class '{name}' repeats a model in its chain")
             if not isinstance(cfg.get("max_tokens_per_call"), int) or cfg["max_tokens_per_call"] <= 0:
                 raise RoutingTableError(f"class '{name}' needs a positive max_tokens_per_call")
+        models = table.get("models")
+        if not isinstance(models, dict) or not models:
+            raise RoutingTableError("routing table needs per-model endpoint metadata")
+        referenced = {model_id for cfg in classes.values() for model_id in [cfg["primary"], *cfg["fallbacks"]]}
+        if not referenced.issubset(models):
+            raise RoutingTableError(f"routing table is missing endpoint metadata for {sorted(referenced - set(models))}")
+        for model_id, metadata in models.items():
+            if not isinstance(model_id, str) or not model_id or not isinstance(metadata, dict):
+                raise RoutingTableError("model endpoint metadata must be keyed by non-empty model IDs")
+            if set(metadata) != {"endpoint_tier", "logs_prompts"}:
+                raise RoutingTableError(f"model '{model_id}' metadata must contain only endpoint_tier and logs_prompts")
+            if not isinstance(metadata["endpoint_tier"], str) or metadata["endpoint_tier"] not in {"free", "paid", "local"}:
+                raise RoutingTableError(f"model '{model_id}' has an invalid endpoint_tier")
+            if not isinstance(metadata["logs_prompts"], bool):
+                raise RoutingTableError(f"model '{model_id}' logs_prompts must be a boolean")
+            if metadata["endpoint_tier"] == "free" and metadata["logs_prompts"] is not True:
+                raise RoutingTableError(f"free model '{model_id}' must be marked as logging prompts")
         controls = table.get("cost_controls", {})
         cap, soft, breaker = controls.get("daily_cap_usd"), controls.get("soft_alert_ratio"), controls.get("circuit_breaker_ratio")
         if not (isinstance(cap, (int, float)) and cap > 0):
@@ -330,6 +352,41 @@ class ModelRouter:
         if model_class not in self.table["classes"]:
             raise UnknownModelClassError(f"Unknown model_class '{model_class}'")
         return self.table["classes"][model_class]
+
+    def _privacy_rank(self, model_id: str) -> int:
+        metadata = self.table["models"][model_id]
+        if metadata["endpoint_tier"] == "free" or metadata["logs_prompts"]:
+            return DATA_CLASS_RANK["public"]
+        if metadata["endpoint_tier"] == "paid":
+            return DATA_CLASS_RANK["internal"]
+        return DATA_CLASS_RANK["restricted"]
+
+    def _policy_safe_chain(self, chain: list[str], data_class: str) -> list[str]:
+        required_rank = DATA_CLASS_RANK[data_class]
+        safe_chain: list[str] = []
+        last_privacy_rank = -1
+        for model_id in chain:
+            privacy_rank = self._privacy_rank(model_id)
+            if privacy_rank < required_rank or privacy_rank < last_privacy_rank:
+                continue
+            safe_chain.append(model_id)
+            last_privacy_rank = privacy_rank
+        return safe_chain
+
+    def _block_unsafe_chain(
+        self, model_class: str, effective_class: str, chain: list[str], data_class: str,
+        task_id: str | None, agent: str | None, started: float,
+    ) -> None:
+        metadata = {model_id: self.table["models"][model_id] for model_id in chain}
+        self._log(
+            "model_route", "blocked", "high", model_class, task_id, agent, started,
+            inputs={"model_class": model_class, "data_class": data_class},
+            outputs={"reason": "data_class_exceeds_endpoint_policy", "endpoint_metadata": metadata},
+            error=f"No endpoint in the {effective_class} chain may receive {data_class} data",
+        )
+        raise DataPolicyViolationError(
+            f"No endpoint in the {effective_class} chain may receive {data_class} data"
+        )
 
     # -- spend state
 
@@ -363,6 +420,7 @@ class ModelRouter:
         agent: str | None = None,
         critical: bool = False,
         max_tokens: int | None = None,
+        data_class: str = "internal",
         now: datetime | None = None,
     ) -> dict[str, Any]:
         started = time.perf_counter()
@@ -373,9 +431,20 @@ class ModelRouter:
             raise ValueError("messages must be a non-empty list of {'role', 'content'} objects")
 
         cfg = self._class(model_class)
-        state = self.spend_state(current)
+        if not isinstance(data_class, str) or data_class not in DATA_CLASS_RANK:
+            self._log(
+                "model_route", "blocked", "high", model_class, task_id, agent, started,
+                inputs={"model_class": model_class, "data_class": data_class if isinstance(data_class, str) else type(data_class).__name__},
+                outputs={"reason": "invalid_data_class"},
+                error="Unknown model-call data class",
+            )
+            raise DataPolicyViolationError("Unknown model-call data class; expected public, internal, or restricted")
         effective_class = model_class
         chain = self.chain_for(model_class)
+        safe_chain = self._policy_safe_chain(chain, data_class)
+        if not safe_chain:
+            self._block_unsafe_chain(model_class, effective_class, chain, data_class, task_id, agent, started)
+        state = self.spend_state(current)
         degraded: str | None = None
 
         if state["circuit_breaker_open"]:
@@ -393,13 +462,16 @@ class ModelRouter:
             effective_class = CRITICAL_FALLBACK_CLASS
             cfg = self._class(effective_class)
             chain = self.cheapest_chain(effective_class)
+            safe_chain = self._policy_safe_chain(chain, data_class)
+            if not safe_chain:
+                self._block_unsafe_chain(model_class, effective_class, chain, data_class, task_id, agent, started)
             degraded = "circuit_breaker_critical_on_cheapest_fast"
 
         limit = cfg["max_tokens_per_call"]
         call_max = min(max_tokens, limit) if max_tokens else limit
 
         attempts: list[dict[str, Any]] = []
-        for model_id in chain:
+        for model_id in safe_chain:
             for attempt_no in range(1, self.max_attempts_per_model + 1):
                 try:
                     resp = self.provider.complete(model_id=model_id, messages=messages, max_tokens=call_max, now=current)
@@ -408,18 +480,18 @@ class ModelRouter:
                     if not exc.retryable:
                         self._log(
                             "model_route", "failure", "medium", model_class, task_id, agent, started,
-                            inputs={"model_class": model_class}, outputs={"attempts": attempts}, error=str(exc),
+                            inputs={"model_class": model_class, "data_class": data_class}, outputs={"attempts": attempts}, error=str(exc),
                         )
                         raise
                     continue
                 self._check_response(resp, model_id)
                 attempts.append({"model_id": model_id, "attempt": attempt_no, "outcome": "success", "status_code": 200, "error": None, "retryable": False})
-                return self._success(resp, model_class, effective_class, chain, attempts, degraded, critical, current, task_id, agent, started)
+                return self._success(resp, model_class, effective_class, chain, attempts, degraded, critical, data_class, current, task_id, agent, started)
 
         incident = self._open_incident(model_class, chain, attempts, current)
         self._log(
             "model_route", "failure", "high", model_class, task_id, agent, started,
-            inputs={"model_class": model_class, "critical": critical},
+            inputs={"model_class": model_class, "data_class": data_class, "critical": critical},
             outputs={"attempts": attempts, "incident_id": incident["incident_id"] if incident else None},
             error="All models in the fallback chain failed",
         )
@@ -443,7 +515,7 @@ class ModelRouter:
 
     def _success(
         self, resp: ProviderResponse, requested_class: str, effective_class: str, chain: list[str],
-        attempts: list[dict[str, Any]], degraded: str | None, critical: bool, current: datetime,
+        attempts: list[dict[str, Any]], degraded: str | None, critical: bool, data_class: str, current: datetime,
         task_id: str | None, agent: str | None, started: float,
     ) -> dict[str, Any]:
         day = self._day(current)
@@ -480,7 +552,7 @@ class ModelRouter:
         }
         self._log(
             "model_route", "success", "low", requested_class, task_id, agent, started,
-            inputs={"model_class": requested_class, "critical": critical},
+            inputs={"model_class": requested_class, "data_class": data_class, "critical": critical},
             outputs={
                 "model_used": model_used, "fallback_used": fallback_used, "degraded_mode": degraded,
                 "attempts": attempts, "spend": state,
