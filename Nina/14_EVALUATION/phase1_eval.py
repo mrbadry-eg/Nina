@@ -7,6 +7,7 @@ directory. A case that raises is reported as a failure with details; it never ab
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -345,15 +346,99 @@ def case_017(tmp: Path) -> Check:
     provider = _router.MockProvider().script(REASONING[0], _router.ProviderQuotaError())
     router = _router.ModelRouter(provider=provider, request_budget=_router.RequestBudget(tmp / "budget.sqlite3"))
     try:
-        router.complete("reasoning", MSGS, data_class="public", now=NOW)
-        quota_stopped = False
-    except _router.ProviderQuotaError:
-        quota_stopped = True
-    no_fallback = [call["model_id"] for call in provider.calls] == [REASONING[0]]
+        result = router.complete("reasoning", MSGS, data_class="public", now=NOW)
+        quota_fell_back_to_local = result["model_id"] == REASONING[-1]
+    except (_router.ProviderQuotaError, _router.ModelRoutingExhaustedError):
+        quota_fell_back_to_local = False
+    hosted_models = {
+        model_id for model_id in REASONING
+        if ROUTING_TABLE["models"][model_id]["endpoint_tier"] != "local"
+    }
+    no_hosted_retry = sum(call["model_id"] in hosted_models for call in provider.calls) == 1
+    local_called = sum(call["model_id"] == REASONING[-1] for call in provider.calls) == 1
     request_counted = router.request_state(NOW)["requests"] == 1
-    return quota_stopped and no_fallback and request_counted, (
-        f"quota_stopped={quota_stopped} fallback_calls={len(provider.calls) - 1} request_counted={request_counted}"
+    return quota_fell_back_to_local and no_hosted_retry and local_called and request_counted, (
+        f"quota_fell_back_to_local={quota_fell_back_to_local} no_hosted_retry={no_hosted_retry} "
+        f"local_called={local_called} request_counted={request_counted}"
     )
+
+
+def case_018(tmp: Path) -> Check:
+    local_model = next(
+        model_id for model_id, metadata in ROUTING_TABLE["models"].items()
+        if metadata["endpoint_tier"] == "local"
+    )
+    hosted_models = [
+        model_id for model_id, metadata in ROUTING_TABLE["models"].items()
+        if metadata["endpoint_tier"] != "local"
+    ]
+    marker = "synthetic-restricted-eval-marker"
+
+    class Transport:
+        def __init__(self, *, offline: bool) -> None:
+            self.offline = offline
+            self.calls: list[dict[str, Any]] = []
+
+        def request(self, method: str, url: str, *, headers: dict[str, str], body: bytes | None = None, timeout: float = 30.0):
+            self.calls.append({"method": method, "url": url, "body": body})
+            if self.offline:
+                raise TimeoutError("synthetic local outage")
+            if method == "GET":
+                return _router.HttpResponse(200, b'{"data":{"requests_per_day":50}}')
+            return _router.HttpResponse(503, b"synthetic hosted outage")
+
+    previous_key = os.environ.get("OPENROUTER_API_KEY")
+    os.environ["OPENROUTER_API_KEY"] = "synthetic-eval-only-key"
+    hosted_transport = Transport(offline=False)
+    local_transport = Transport(offline=True)
+    try:
+        hosted = _router.OpenAICompatibleProvider(
+            _router.OpenAICompatibleProvider.DEFAULT_OPENROUTER_URL,
+            transport=hosted_transport,
+        )
+        local = _router.OpenAICompatibleProvider(
+            _router.OpenAICompatibleProvider.DEFAULT_LOCAL_URL,
+            transport=local_transport,
+        )
+        provider_map = {model_id: hosted for model_id in hosted_models}
+        provider_map[local_model] = local
+        audit = _audit.AuditLogger(audit_path=tmp / "audit.jsonl", incidents_dir=tmp / "incidents")
+        router = _router.ModelRouter(
+            provider=_router.ModelProviderPool(provider_map),
+            routing_table=ROUTING_TABLE,
+            integration_status={"integrations": {"openrouter": {"status": "verified"}}},
+            request_budget=_router.RequestBudget(tmp / "budget.sqlite3"),
+            audit_logger=audit,
+        )
+        failed_closed = False
+        try:
+            router.complete(
+                "reasoning",
+                [{"role": "user", "content": marker}],
+                data_class="restricted",
+                now=NOW,
+            )
+        except _router.ModelRoutingExhaustedError:
+            failed_closed = True
+        hosted_prompt_never_sent = not any(
+            call["method"] == "POST" and call["body"] and marker.encode() in call["body"]
+            for call in hosted_transport.calls
+        )
+        local_was_attempted = (
+            len(local_transport.calls) == 1
+            and marker.encode() in local_transport.calls[0]["body"]
+        )
+        audit_has_no_prompt = marker not in (tmp / "audit.jsonl").read_text(encoding="utf-8")
+        ok = failed_closed and hosted_prompt_never_sent and local_was_attempted and audit_has_no_prompt
+        return ok, (
+            f"failed_closed={failed_closed} hosted_prompt_never_sent={hosted_prompt_never_sent} "
+            f"local_was_attempted={local_was_attempted} audit_has_no_prompt={audit_has_no_prompt}"
+        )
+    finally:
+        if previous_key is None:
+            os.environ.pop("OPENROUTER_API_KEY", None)
+        else:
+            os.environ["OPENROUTER_API_KEY"] = previous_key
 
 
 CASES: dict[str, Callable[[Path], Check]] = {
@@ -369,6 +454,7 @@ CASES: dict[str, Callable[[Path], Check]] = {
     "EVAL-SECURITY-015": case_015,
     "EVAL-SECURITY-016": case_016,
     "EVAL-RELIABILITY-017": case_017,
+    "EVAL-SECURITY-018": case_018,
 }
 
 

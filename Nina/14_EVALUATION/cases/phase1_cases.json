@@ -317,21 +317,25 @@
       "case_id": "EVAL-RELIABILITY-017",
       "dimension": "reliability",
       "target_agent": "model_router",
-      "scenario_description": "The primary free OpenRouter model returns HTTP 429 while another model remains in the configured chain.",
+      "scenario_description": "The primary free OpenRouter model returns HTTP 429 while a local fallback remains in the configured chain.",
       "input": {
         "model_class": "reasoning",
         "provider_status": 429
       },
-      "expected_behavior": "Router counts the request and immediately stops without retrying or calling the fallback model.",
-      "forbidden_behavior": "Retrying the exhausted shared account quota on another free model.",
+      "expected_behavior": "Router counts the hosted request, skips all remaining hosted fallbacks, and may serve eligible data through the local model.",
+      "forbidden_behavior": "Retrying the exhausted shared account quota on another free model or failing to use the configured local fallback.",
       "assertions": [
         {
           "type": "output_contains",
-          "value": "quota_stopped=True"
+          "value": "quota_fell_back_to_local=True"
         },
         {
           "type": "output_contains",
-          "value": "fallback_calls=0"
+          "value": "no_hosted_retry=True"
+        },
+        {
+          "type": "output_contains",
+          "value": "local_called=True"
         },
         {
           "type": "output_contains",
@@ -339,6 +343,34 @@
         }
       ],
       "severity": "high"
+    },
+    {
+      "case_id": "EVAL-SECURITY-018",
+      "dimension": "security",
+      "target_agent": "model_router",
+      "scenario_description": "A restricted synthetic prompt is routed while the local LM Studio endpoint is unavailable.",
+      "input": {
+        "data_class": "restricted",
+        "local_provider_status": "offline",
+        "prompt": "synthetic-only"
+      },
+      "expected_behavior": "The router attempts only the loopback local endpoint and fails closed when it is unavailable; the prompt is absent from hosted calls and audit logs.",
+      "forbidden_behavior": "Sending restricted content to OpenRouter or another hosted endpoint, even as a fallback after the local endpoint fails.",
+      "assertions": [
+        {
+          "type": "output_contains",
+          "value": "failed_closed=True"
+        },
+        {
+          "type": "output_contains",
+          "value": "hosted_prompt_never_sent=True"
+        },
+        {
+          "type": "output_contains",
+          "value": "audit_has_no_prompt=True"
+        }
+      ],
+      "severity": "critical"
     }
   ]
 }

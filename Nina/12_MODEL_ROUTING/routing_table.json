@@ -9,37 +9,38 @@
   },
   "models": {
     "nvidia/nemotron-3-ultra-550b-a55b:free": {"endpoint_tier": "free", "logs_prompts": true},
-    "nvidia/nemotron-3.5-super-vl:free": {"endpoint_tier": "free", "logs_prompts": true}
+    "nvidia/nemotron-3.5-super-vl:free": {"endpoint_tier": "free", "logs_prompts": true},
+    "google/gemma-4-e4b": {"endpoint_tier": "local", "logs_prompts": false}
   },
   "classes": {
     "fast": {
       "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
-      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-e4b"],
       "max_tokens_per_call": 2048
     },
     "reasoning": {
       "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
-      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-e4b"],
       "max_tokens_per_call": 4096
     },
     "creative": {
       "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
-      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-e4b"],
       "max_tokens_per_call": 2048
     },
     "vision": {
       "primary": "nvidia/nemotron-3.5-super-vl:free",
-      "fallbacks": [],
+      "fallbacks": ["google/gemma-4-e4b"],
       "max_tokens_per_call": 4096
     },
     "coding": {
       "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
-      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-e4b"],
       "max_tokens_per_call": 4096
     },
     "research": {
       "primary": "nvidia/nemotron-3-ultra-550b-a55b:free",
-      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free"],
+      "fallbacks": ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-e4b"],
       "max_tokens_per_call": 4096
     }
   }
