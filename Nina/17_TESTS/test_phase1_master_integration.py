@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +27,14 @@ TABLE = json.loads((REPO_ROOT / "12_MODEL_ROUTING" / "routing_table.json").read_
 REASONING = TABLE["classes"]["reasoning"]
 
 
+def _non_logging_paid_test_table() -> dict:
+    table = copy.deepcopy(TABLE)
+    for metadata in table["models"].values():
+        if metadata["endpoint_tier"] == "paid":
+            metadata["logs_prompts"] = False
+    return table
+
+
 def _task(order_id: str = "ORD-1042") -> dict:
     return {
         "task_id": "TASK-20261125-INT1", "objective": f"Inspect {order_id} fulfillment status", "requester": "founder:abdulrahman",
@@ -48,7 +57,7 @@ def _actions(stack) -> list[str]:
 
 @pytest.fixture
 def stack(tmp_path: Path):
-    return _stack.build_phase1_stack(tmp_path)
+    return _stack.build_phase1_stack(tmp_path, routing_table=_non_logging_paid_test_table())
 
 
 # ------------------------------------------------------------------ the full loop
@@ -203,7 +212,7 @@ def test_tampered_payload_is_still_blocked_after_freshness_checks(stack) -> None
 
 def test_503_on_primary_model_falls_back_and_is_recorded_on_the_agent_task(tmp_path: Path) -> None:
     provider = _mr.MockProvider().script(REASONING["primary"], _mr.ProviderCapacityError())
-    s = _stack.build_phase1_stack(tmp_path, provider=provider)
+    s = _stack.build_phase1_stack(tmp_path, provider=provider, routing_table=_non_logging_paid_test_table())
     plan = s.master.plan_and_delegate(_task())
     assert plan["agent_task"]["model_used"] == f"mock:{REASONING['fallbacks'][0]}"
     assert plan["model_route"]["fallback_used"] is True and plan["status"] == "awaiting_approval"
@@ -213,7 +222,7 @@ def test_planning_degrades_gracefully_when_all_models_fail(tmp_path: Path) -> No
     provider = _mr.MockProvider()
     for m in [REASONING["primary"], *REASONING["fallbacks"]]:
         provider.fail_always(m, _mr.ProviderCapacityError())
-    s = _stack.build_phase1_stack(tmp_path, provider=provider)
+    s = _stack.build_phase1_stack(tmp_path, provider=provider, routing_table=_non_logging_paid_test_table())
     plan = s.master.plan_and_delegate(_task())
     assert plan["status"] == "awaiting_approval"  # deterministic planning does not need a model
     assert plan["agent_task"]["model_used"] == "deterministic-milestone1-local" and plan["agent_task"]["cost_usd"] == 0.0
@@ -222,10 +231,32 @@ def test_planning_degrades_gracefully_when_all_models_fail(tmp_path: Path) -> No
     assert incident["related_incidents"] == ["INC-20261125-CAP1"] and incident["detected_by"] == "model_router"
 
 
+def test_internal_advisory_is_blocked_without_provider_call_and_degrades_gracefully(tmp_path: Path) -> None:
+    provider = _mr.MockProvider()
+    free_model = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    free_only_table = copy.deepcopy(TABLE)
+    free_only_table["classes"]["reasoning"]["primary"] = free_model
+    free_only_table["classes"]["reasoning"]["fallbacks"] = []
+    free_only_table["models"][free_model] = {"endpoint_tier": "free", "logs_prompts": True}
+    stack = _stack.build_phase1_stack(tmp_path, provider=provider, routing_table=free_only_table)
+
+    plan = stack.master.plan_and_delegate(_task())
+
+    events = _events(stack)
+    blocked = [event for event in events if event["action"] == "model_route" and event["outcome"] == "blocked"]
+    assert plan["status"] == "awaiting_approval"
+    assert plan["model_route"] is None
+    assert plan["routing_degraded"]["error"] == "DataPolicyViolationError"
+    assert provider.calls == []
+    assert len(blocked) == 1 and blocked[0]["inputs_summary"]["data_class"] == "internal"
+
+
 def test_circuit_breaker_pauses_advisory_routing_but_not_the_control_plane(tmp_path: Path) -> None:
     ledger = _mr.SpendLedger()
     sink: list[dict] = []
-    s = _stack.build_phase1_stack(tmp_path, ledger=ledger, alert_sink=sink.append)
+    s = _stack.build_phase1_stack(
+        tmp_path, ledger=ledger, alert_sink=sink.append, routing_table=_non_logging_paid_test_table()
+    )
     ledger.add(datetime.now(timezone.utc).strftime("%Y-%m-%d"), 10.0)
     plan = s.master.plan_and_delegate(_task())
     assert plan["routing_degraded"]["error"] == "CircuitBreakerOpenError"
@@ -235,7 +266,7 @@ def test_circuit_breaker_pauses_advisory_routing_but_not_the_control_plane(tmp_p
 
 def test_soft_spend_alert_is_surfaced_to_the_founder_in_the_plan_result(tmp_path: Path) -> None:
     ledger = _mr.SpendLedger()
-    s = _stack.build_phase1_stack(tmp_path, ledger=ledger)
+    s = _stack.build_phase1_stack(tmp_path, ledger=ledger, routing_table=_non_logging_paid_test_table())
     ledger.add(datetime.now(timezone.utc).strftime("%Y-%m-%d"), 8.0)
     plan = s.master.plan_and_delegate(_task())
     assert [a["type"] for a in plan["founder_alerts"]] == ["spend_soft_alert"] and plan["founder_alerts"][0]["notify"] == "founder:abdulrahman"

@@ -20,6 +20,7 @@
 | DM-08 | **Untrusted input.** Customer-provided text is data, never instructions. |
 | DM-09 | **No secrets in prompts, Git or exports.** Credentials are injected at runtime only. |
 | DM-10 | **Exposure incidents.** Suspected exposure of personal or payment data is logged as a `security_event` incident and escalated. |
+| DM-11 | **Model endpoint classification.** Model calls default to `internal`; callers may classify data as `public`, `internal` or `restricted`. Free endpoints and any endpoint that logs prompts accept `public` only. A non-logging paid endpoint may receive `internal`; `restricted` data, including customer personal data, may be sent only to a non-logging local endpoint. Unknown endpoint metadata blocks the call. Fallbacks may not weaken the privacy level of the route. |
 
 ## Escalation
 

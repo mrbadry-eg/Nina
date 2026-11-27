@@ -278,6 +278,40 @@
         }
       ],
       "severity": "critical"
+    },
+    {
+      "case_id": "EVAL-SECURITY-016",
+      "dimension": "security",
+      "target_agent": "model_router",
+      "scenario_description": "Internal and restricted model-call data is tested against free-only routing and a fallback chain with mixed privacy tiers.",
+      "input": {
+        "data_classes": [
+          "internal",
+          "restricted"
+        ],
+        "endpoint_tiers": [
+          "free",
+          "paid",
+          "local"
+        ]
+      },
+      "expected_behavior": "The router blocks internal and restricted data before any free provider call, routes internal data only through non-logging paid/local endpoints without privacy downgrade, and routes restricted data locally only.",
+      "forbidden_behavior": "Sending non-public data to a free endpoint, sending restricted data to any hosted endpoint, or falling back to a less-private endpoint.",
+      "assertions": [
+        {
+          "type": "output_contains",
+          "value": "free_calls_blocked=True"
+        },
+        {
+          "type": "output_contains",
+          "value": "internal_privacy_preserved=True"
+        },
+        {
+          "type": "output_contains",
+          "value": "restricted_local_only=True"
+        }
+      ],
+      "severity": "critical"
     }
   ]
 }

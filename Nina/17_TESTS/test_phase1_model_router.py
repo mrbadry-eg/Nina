@@ -25,7 +25,13 @@ FAST = TABLE["classes"]["fast"]
 def _router(tmp_path: Path | None = None, provider=None, **kw):
     audit = _audit.AuditLogger(audit_path=tmp_path / "audit.jsonl", incidents_dir=tmp_path / "inc") if tmp_path else None
     provider = provider or _mr.MockProvider()
-    return _mr.ModelRouter(provider=provider, audit_logger=audit, **kw), provider, audit
+    table = kw.pop("routing_table", None)
+    if table is None:
+        table = copy.deepcopy(TABLE)
+        for metadata in table["models"].values():
+            if metadata["endpoint_tier"] == "paid":
+                metadata["logs_prompts"] = False
+    return _mr.ModelRouter(provider=provider, routing_table=table, audit_logger=audit, **kw), provider, audit
 
 
 def _events(tmp_path: Path) -> list[dict]:
@@ -47,6 +53,8 @@ def test_routing_classes_equal_canonical_model_class_enum() -> None:
     (lambda t: t["classes"].pop("vision"), "canonical"),
     (lambda t: t["classes"]["fast"].update(fallbacks=["google/gemini-2.5-flash"]), "repeats"),
     (lambda t: t["classes"]["fast"].update(max_tokens_per_call=0), "max_tokens"),
+    (lambda t: t["models"].pop("google/gemini-2.5-flash"), "missing endpoint metadata"),
+    (lambda t: t["models"]["nvidia/nemotron-3-ultra-550b-a55b:free"].update(logs_prompts=False), "marked as logging"),
     (lambda t: t["cost_controls"].update(soft_alert_ratio=1.2), "ratio"),
     (lambda t: t["cost_controls"].update(daily_cap_usd=0), "daily_cap"),
 ])
@@ -68,6 +76,81 @@ def test_chains_follow_the_routing_table() -> None:
     for name, cfg in TABLE["classes"].items():
         assert router.chain_for(name) == [cfg["primary"], *cfg["fallbacks"]]
     assert router.cheapest_chain("fast")[0] == "openai/gpt-4o-mini"
+
+
+def test_free_nvidia_models_are_marked_as_logged_free_endpoints() -> None:
+    for model_id in ("nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3.5-super-vl:free"):
+        assert TABLE["models"][model_id] == {"endpoint_tier": "free", "logs_prompts": True}
+
+
+def _policy_table(chain: list[str], metadata: dict[str, dict]) -> dict:
+    table = copy.deepcopy(TABLE)
+    table["classes"]["fast"]["primary"] = chain[0]
+    table["classes"]["fast"]["fallbacks"] = chain[1:]
+    table["models"].update(metadata)
+    return table
+
+
+FREE_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+PAID_MODEL = "test/paid-no-log"
+LOCAL_MODEL = "test/local-private"
+POLICY_MODELS = {
+    FREE_MODEL: {"endpoint_tier": "free", "logs_prompts": True},
+    PAID_MODEL: {"endpoint_tier": "paid", "logs_prompts": False},
+    LOCAL_MODEL: {"endpoint_tier": "local", "logs_prompts": False},
+}
+
+
+@pytest.mark.parametrize("data_class", ["internal", "restricted"])
+def test_non_public_data_is_blocked_before_free_provider_and_audited(data_class: str, tmp_path: Path) -> None:
+    table = _policy_table([FREE_MODEL], POLICY_MODELS)
+    provider = _mr.MockProvider()
+    audit = _audit.AuditLogger(audit_path=tmp_path / "audit.jsonl", incidents_dir=tmp_path / "inc")
+    router = _mr.ModelRouter(provider=provider, routing_table=table, audit_logger=audit)
+
+    with pytest.raises(_mr.DataPolicyViolationError):
+        if data_class == "internal":
+            router.complete("fast", MSGS, now=NOW)
+        else:
+            router.complete("fast", MSGS, data_class=data_class, now=NOW)
+
+    events = _events(tmp_path)
+    assert provider.calls == []
+    assert len(events) == 1 and events[0]["action"] == "model_route" and events[0]["outcome"] == "blocked"
+    assert events[0]["inputs_summary"]["data_class"] == data_class
+    _sv.CanonicalSchemaValidator().validate("17_audit_event.schema.json", events[0])
+
+
+def test_public_data_is_allowed_on_free_endpoint() -> None:
+    provider = _mr.MockProvider()
+    router = _mr.ModelRouter(provider=provider, routing_table=_policy_table([FREE_MODEL], POLICY_MODELS))
+
+    result = router.complete("fast", MSGS, data_class="public", now=NOW)
+
+    assert result["model_id"] == FREE_MODEL
+    assert [call["model_id"] for call in provider.calls] == [FREE_MODEL]
+
+
+def test_internal_fallback_never_weakens_privacy() -> None:
+    provider = _mr.MockProvider().script(PAID_MODEL, _mr.ProviderCapacityError())
+    table = _policy_table([PAID_MODEL, FREE_MODEL, LOCAL_MODEL], POLICY_MODELS)
+    router = _mr.ModelRouter(provider=provider, routing_table=table)
+
+    result = router.complete("fast", MSGS, data_class="internal", now=NOW)
+
+    assert result["model_id"] == LOCAL_MODEL
+    assert [call["model_id"] for call in provider.calls] == [PAID_MODEL, LOCAL_MODEL]
+
+
+def test_restricted_data_uses_local_endpoint_only() -> None:
+    provider = _mr.MockProvider()
+    table = _policy_table([FREE_MODEL, PAID_MODEL, LOCAL_MODEL], POLICY_MODELS)
+    router = _mr.ModelRouter(provider=provider, routing_table=table)
+
+    result = router.complete("fast", MSGS, data_class="restricted", now=NOW)
+
+    assert result["model_id"] == LOCAL_MODEL
+    assert [call["model_id"] for call in provider.calls] == [LOCAL_MODEL]
 
 
 # ------------------------------------------------------------------ success + determinism
@@ -282,6 +365,7 @@ def test_default_provider_is_mock_while_openrouter_is_unavailable() -> None:
     assert status["integrations"]["openrouter"]["status"] == "unavailable"
     router = _mr.ModelRouter()
     assert isinstance(router.provider, _mr.MockProvider) and router.provider.simulated is True
+    assert router.complete("fast", MSGS, data_class="public", now=NOW)["simulated"] is True
 
 
 def test_verified_gateway_without_injected_provider_fails_closed() -> None:
@@ -294,5 +378,5 @@ def test_verified_gateway_without_injected_provider_fails_closed() -> None:
         simulated = False
 
     router = _mr.ModelRouter(integration_status=status, provider=Real())
-    res = router.complete("fast", MSGS, now=NOW)
+    res = router.complete("fast", MSGS, data_class="public", now=NOW)
     assert res["simulated"] is False and res["model_used"] == FAST["primary"]  # no 'mock:' prefix for real providers

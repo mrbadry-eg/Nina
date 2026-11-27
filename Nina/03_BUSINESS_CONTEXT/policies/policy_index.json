@@ -53,7 +53,16 @@
       "machine_values": {
         "audit_redaction_keys": ["api_key", "apikey", "token", "secret", "password", "authorization", "phone", "email", "address", "card", "cvv"],
         "customer_inactivity_purge_months": 24,
-        "incident_retention_months": 12
+        "incident_retention_months": 12,
+        "model_call_data_policy": {
+          "default_data_class": "internal",
+          "data_classes": ["public", "internal", "restricted"],
+          "free_endpoint_max_data_class": "public",
+          "logging_endpoint_max_data_class": "public",
+          "paid_non_logging_endpoint_max_data_class": "internal",
+          "local_non_logging_endpoint_max_data_class": "restricted",
+          "restricted_endpoint_tier": "local"
+        }
       },
       "open_decisions": ["OD-DM-1", "OD-DM-2", "OD-DM-3"]
     }

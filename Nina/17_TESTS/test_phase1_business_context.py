@@ -171,6 +171,13 @@ def test_machine_values_align_with_frozen_context_and_code() -> None:
 
     dm = by_id["POL-DATA-MINIMIZATION-001"]["machine_values"]
     assert set(dm["audit_redaction_keys"]) == set(_audit.REDACT_KEYS)
+    model_policy = dm["model_call_data_policy"]
+    assert model_policy["default_data_class"] == "internal"
+    assert model_policy["data_classes"] == ["public", "internal", "restricted"]
+    assert model_policy["free_endpoint_max_data_class"] == "public"
+    assert model_policy["restricted_endpoint_tier"] == "local"
+    policy_text = _policy_text(by_id["POL-DATA-MINIMIZATION-001"])
+    assert "| DM-11 |" in policy_text and _header(policy_text, "Status") == "PROPOSED"
 
 
 def test_business_context_docs_contain_no_pii_or_secrets() -> None:
